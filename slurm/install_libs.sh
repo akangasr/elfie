@@ -42,18 +42,12 @@ unset CFLAGS
 unset CXXFLAGS
 unset LDFLAGS
 
-echo "Installing ELFI.."
-if [ -z "${ELFIE_SOURCE}" ];
-then
-    cd ${ELFIE_SOURCE}
-    pip install numpy cython
-    pip install -e .
-else
-    pip install elfi
-fi
+echo "Installing ELFIE.."
+cd ${ELFIE_SOURCE}
+pip install -e .
 
 echo "Finding additional requirements.."
-for r in "${ELFIE_REQUIREMENTS[@]}"
+for r in "${ELFIE_OTHER_REQUIREMENTS[@]}"
 do
     n_requirements="$(cat ${r} | wc -l)"
     if [ $n_requirements -gt "0" ];
