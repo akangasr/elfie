@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 import GPy
 
@@ -6,6 +7,7 @@ from elfi.methods.methods import BOLFI
 from elfi.methods.results import BolfiPosterior
 from elfi.methods.bo.acquisition import UniformAcquisition, LCBSC
 
+from elfie.inference import InferenceTask
 from elfie.acquisition import GridAcquisition
 
 import logging
@@ -102,17 +104,40 @@ class BolfiFactory():
                       batch_size=self.params.batch_size,
                       max_parallel_batches=self.params.parallel_batches,
                       seed=self.params.seed)
-        return BolfiExperiment(bolfi, self.params)
+        return BolfiInferenceTask(bolfi, copy.copy(self.params))
+
+    def to_dict(self):
+        return {
+                "model": "model",  # TODO
+                "params": self.params.to_dict(),
+                }
 
 
-class BolfiExperiment():
+class BolfiInferenceTask(InferenceTask):
     def __init__(self, bolfi, params):
         self.bolfi = bolfi
         self.params = params
+        self.result = None
 
     def run(self):
         self.bolfi.infer(self.params.n_samples)
-        return self.bolfi.infer_posterior()
+        self.result = self.bolfi.infer_posterior()
+        logger.info("Final ML estimate: {}".format(self.result.ML)
+        logger.info("Final MAP estimate: {}".format(self.result.MAP)
+
+    def plot(self, plotter):
+        if self.result.model._gp is None:
+            plotter.plot_text_page("No model to plot")
+            return
+        fig = pl.figure(figsize=plotter.figsize)
+        try:
+            self.result.model._gp.plot()
+        except:
+            fig.text(0.02, 0.02, "Was not able to plot model")
+        plot_params.pdf.savefig()
+        pl.close()
+
+
 
 
 
