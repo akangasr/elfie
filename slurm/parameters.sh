@@ -8,9 +8,9 @@ ELFIE_MODULES=(
     "OpenMPI/2.0.2-GCC-6.3.0-2.27"
     )
 ELFIE_REQUIREMENTS=(
-    "${ELFIE_ROOT}/elfi-experiment/requirements.txt"
+    "${ELFIE_ROOT}/elfie/requirements.txt"
     )
 ELFIE_GIT_REPOS=(
     "${ELFIE_ROOT}/elfi2"
-    "${ELFIE_ROOT}/elfi-experiment"
+    "${ELFIE_ROOT}/elfie"
     )
