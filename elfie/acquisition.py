@@ -1,6 +1,6 @@
 import numpy as np
 
-from elfi.bo.acquisition import AcquisitionBase
+from elfi.methods.bo.acquisition import AcquisitionBase
 
 import logging
 logger = logging.getLogger(__name__)
@@ -32,7 +32,6 @@ class GridAcquisition(AcquisitionBase):
                 l = len(tics)
                 mod = idx % l
                 idx = int(idx / l)
-                print(i,j, tics, mod)
                 ret[i, j] = tics[mod]
         return ret
 
