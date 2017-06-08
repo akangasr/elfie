@@ -1,10 +1,12 @@
 import numpy as np
 import GPy
 
-import elfi
-from elfi.bo.gpy_regression import GPyRegression
-from elfi.methods import BOLFI
-from elfi.results import BolfiPosterior
+from elfi.methods.bo.gpy_regression import GPyRegression
+from elfi.methods.methods import BOLFI
+from elfi.methods.results import BolfiPosterior
+from elfi.methods.bo.acquisition import UniformAcquisition, LCBSC
+
+from elfie.acquisition import GridAcquisition
 
 import logging
 logger = logging.getLogger(__name__)
@@ -30,9 +32,11 @@ class BolfiParams():
             gp_params_update_interval=0,
             acq_delta=0.1,
             acq_noise_cov=0.1,
-            acq_opt_iterations=100):
+            acq_opt_iterations=100,
+            seed=1,
+            discrepancy_node_name="discrepancy"):
         for k, v in locals().items():
-            seattr(self, k, v)
+            setattr(self, k, v)
 
     def to_dict(self):
         ret = self.__dict__.copy()
@@ -62,13 +66,12 @@ class BolfiFactory():
         kernel = self.params.kernel_class(input_dim=input_dim,
                                           variance=self.params.kernel_var,
                                           lengthscale=self.params.kernel_scale)
-        gp = GPy.model.GPRegression(kernel=kernel,
-                                    noise_var=self.params.noise_var)
         return GPyRegression(input_dim=input_dim,
                         bounds=self.params.bounds,
                         optimizer=self.params.gp_params_optimizer,
                         max_opt_iters=self.params.gp_params_max_opt_iters,
-                        gp=gp)
+                        kernel=kernel,
+                        noise_var=self.params.noise_var)
 
     def _acquisition(self, gp):
         if self.params.sampling_type == "uniform":
@@ -85,18 +88,32 @@ class BolfiFactory():
         assert False
 
     def get(self):
-        """ Returns new BOLFI inference object
+        """ Returns new BolfiExperiment object
         """
         gp = self._gp()
         acquisition = self._acquisition(gp)
-        return BOLFI(model=self.model,
-                     target="discrepancy",
-                     target_model=gp,
-                     acquisition_method=acquisition,
-                     bounds=self.params.bounds,
-                     initial_evidence=self.params.n_initial_evidence,
-                     update_interval=self.params.gp_params_update_interval,
-                     batch_size=self.params.batch_size,
-                     max_parallel_batches=self.params.parallel_batches,
-                     seed=self.params.seed)
+        bolfi = BOLFI(model=self.model,
+                      target=self.params.discrepancy_node_name,
+                      target_model=gp,
+                      acquisition_method=acquisition,
+                      bounds=self.params.bounds,
+                      initial_evidence=self.params.n_initial_evidence,
+                      update_interval=self.params.gp_params_update_interval,
+                      batch_size=self.params.batch_size,
+                      max_parallel_batches=self.params.parallel_batches,
+                      seed=self.params.seed)
+        return BolfiExperiment(bolfi, self.params)
+
+
+class BolfiExperiment():
+    def __init__(self, bolfi, params):
+        self.bolfi = bolfi
+        self.params = params
+
+    def run(self):
+        self.bolfi.infer(self.params.n_samples)
+        return self.bolfi.infer_posterior()
+
+
+
 
