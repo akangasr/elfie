@@ -8,7 +8,6 @@ from elfi.methods.results import BolfiPosterior
 from elfi.methods.bo.acquisition import UniformAcquisition, LCBSC
 from elfi.store import OutputPool
 
-from elfie.inference import InferenceTask
 from elfie.acquisition import GridAcquisition
 from elfie.utils import eval_2d_mesh
 
@@ -124,7 +123,7 @@ class BolfiFactory():
                 }
 
 
-class BolfiInferenceTask(InferenceTask):
+class BolfiInferenceTask():
     def __init__(self, bolfi, model, params, pool, paramnames, simuname, discname):
         self.bolfi = bolfi
         self.model = model
@@ -176,7 +175,6 @@ class BolfiInferenceTask(InferenceTask):
         self.MAP_val = None
         self.order = None
         for idx, sample in self.samples.items():
-            print(sample)
             x = np.array([sample["X"][k] for k in self.paramnames])
             lp = self.post.logpdf(x)
             if self.MAP_val is None or lp > self.ML_val:

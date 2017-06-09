@@ -1,4 +1,8 @@
+import time
 import numpy as np
+
+import logging
+logger = logging.getLogger(__name__)
 
 #with PdfPages(self.pdf_file) as pdf:
 
@@ -11,6 +15,7 @@ def inference_experiment(inference_factory,
         inference_task = inference_factory.get()
 
         ret = dict()
+        logger.info("Starting inference task")
         sampling_start = time.time()
         inference_task.do_sampling()
         inference_task.compute_samples_and_ML()
@@ -20,6 +25,7 @@ def inference_experiment(inference_factory,
         ret["ML"] = inference_task.ML
         ret["ML_val"] = inference_task.ML_val
 
+        logger.info("Analyzing posterior")
         post_start = time.time()
         inference_task.compute_posterior()
         inference_task.compute_MAP()
@@ -30,13 +36,16 @@ def inference_experiment(inference_factory,
         ret["MAP_val"] = inference_task.MAP_val
 
         if pdf is not None:
+            logger.info("Plotting")
             inference_task.plot(pdf, figsize)
 
         if ground_truth is not None:
+            logger.info("Computing errors to ground truth")
             ret["ML_err"] = rmse(ret["ML"], ground_truth)
             ret["MAP_err"] = rmse(ret["MAP"], ground_truth)
 
         if test_data is not None:
+            logger.info("Computing prediction errors")
             ret["ML_disc"] = inference_task.compute_discrepancy_with_data(ret["ML"], test_data)
             ret["MAP_disc"] = inference_task.compute_discrepancy_with_data(ret["MAP"], test_data)
 
@@ -75,5 +84,5 @@ def rmse(a, b):
     sqerr = []
     for k in a.keys():
         sqerr.append((float(a[k]) - float(b[k])) ** 2)
-    return float(np.sqrt(np.mean(diff)))
+    return float(np.sqrt(np.mean(sqerr)))
 
