@@ -10,18 +10,29 @@ def test_bolfi_params_can_be_serialized():
     json.dumps(bp.__str__())
 
 def test_simple_inference_can_be_run():
+    n_samples = 4
+    true_params = [0.5, 0.5]  # t1, t2
     for sampling_type in ["grid", "uniform", "BO"]:
         params = BolfiParams(bounds=((0,1),(0,1)),
-                             n_samples=4,
+                             n_samples=n_samples,
                              n_initial_evidence=2,
                              sampling_type=sampling_type,
                              grid_tics=[[0.25, 0.75], [0.33, 0.66]],
                              seed=1,
                              discrepancy_node_name="d")
-        model = get_model()
+        model = get_model(n_obs=1000, true_params=true_params, seed_obs=1)
         results=list()
         bf = BolfiFactory(model, params)
-        bf.get().run()
+        exp = bf.get()
+        exp.do_sampling()
+        exp.compute_samples_and_ML()
+        assert len(exp.samples) == n_samples
+        assert exp.ML_val is not None
+        exp.compute_posterior()
+        assert exp.post is not None
+        exp.compute_MAP()
+        assert exp.MAP_val is not None
+
 
 @pytest.mark.skip(reason="elfi does not work yet deterministically")
 def test_simple_inference_can_be_run_consistently():
