@@ -19,6 +19,7 @@ def test_simple_inference_can_be_run():
                              sampling_type=sampling_type,
                              grid_tics=[[0.25, 0.75], [0.33, 0.66]],
                              seed=1,
+                             simulator_node_name="MA2",
                              discrepancy_node_name="d")
         model = get_model(n_obs=1000, true_params=true_params, seed_obs=1)
         results=list()
@@ -32,6 +33,10 @@ def test_simple_inference_can_be_run():
         assert exp.post is not None
         exp.compute_MAP()
         assert exp.MAP_val is not None
+        ML_sim = exp.simulate_data(exp.ML)
+        MAP_sim = exp.simulate_data(exp.MAP)
+        ML_disc = exp.compute_discrepancy_with_data(exp.ML, ML_sim)
+        MAP_disc = exp.compute_discrepancy_with_data(exp.MAP, MAP_sim)
 
 
 @pytest.mark.skip(reason="elfi does not work yet deterministically")

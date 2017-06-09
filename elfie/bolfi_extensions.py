@@ -38,6 +38,7 @@ class BolfiParams():
             acq_noise_cov=0.1,
             acq_opt_iterations=100,
             seed=1,
+            simulator_node_name="simulator",
             discrepancy_node_name="discrepancy"):
         for k, v in locals().items():
             setattr(self, k, v)
@@ -108,7 +109,13 @@ class BolfiFactory():
                       max_parallel_batches=self.params.parallel_batches,
                       seed=self.params.seed,
                       pool=pool)
-        return BolfiInferenceTask(bolfi, copy.copy(self.params), pool, self.model.parameters, self.params.discrepancy_node_name)
+        return BolfiInferenceTask(bolfi,
+                                  self.model,
+                                  copy.copy(self.params),
+                                  pool,
+                                  self.model.parameters,
+                                  self.params.simulator_node_name,
+                                  self.params.discrepancy_node_name)
 
     def to_dict(self):
         return {
@@ -118,8 +125,9 @@ class BolfiFactory():
 
 
 class BolfiInferenceTask(InferenceTask):
-    def __init__(self, bolfi, params, pool, paramnames, discname):
+    def __init__(self, bolfi, model, params, pool, paramnames, simuname, discname):
         self.bolfi = bolfi
+        self.model = model
         self.params = params
         self.post = None
         self.samples = dict()
@@ -130,6 +138,7 @@ class BolfiInferenceTask(InferenceTask):
         self.order = None
         self.pool = pool
         self.paramnames = paramnames
+        self.simuname = simuname
         self.discname = discname
 
     def do_sampling(self):
@@ -174,20 +183,29 @@ class BolfiInferenceTask(InferenceTask):
                 self.MAP_val = lp
                 self.MAP = sample["X"]
 
-    def plot(self, plotter):
+    def simulate_data(self, with_values):
+        return self.model.generate(batch_size=1, with_values=with_values)[self.simuname][0]
+
+    def compute_discrepancy_with_data(self, with_values, new_data):
+        old_data = self.model.computation_context.observed[self.simuname]
+        self.model.computation_context.observed[self.simuname] = new_data
+        ret = self.model.generate(batch_size=1, with_values=with_values)[self.discname][0]
+        self.model.computation_context.observed[self.simuname] = old_data
+        return ret
+
+    def plot(self, pdf, figsize):
         if self.result.model._gp is None:
-            plotter.plot_text_page("No model to plot")
             return
-        fig = pl.figure(figsize=plotter.figsize)
+        fig = pl.figure(figsize=figsize)
         try:
             self.post.model._gp.plot()
         except:
             fig.text(0.02, 0.02, "Was not able to plot GP model")
-        plotter.pdf.savefig()
+        pdf.savefig()
         pl.close()
 
         if len(self.order) == 2:
-            fig, ax = pl.subplots(1,1,figsize=plotter.figsize)
+            fig, ax = pl.subplots(1,1,figsize=figsize)
             try:
                 ax.set_xlabel(self.order[0], fontsize=20)
                 ax.set_ylabel(self.order[1], fontsize=20)
@@ -198,7 +216,7 @@ class BolfiInferenceTask(InferenceTask):
                 pl.show()
             except:
                 fig.text(0.02, 0.02, "Was not able to plot posterior")
-            plotter.pdf.savefig()
+            pdf.savefig()
             pl.close()
 
 
