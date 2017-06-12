@@ -1,3 +1,5 @@
+import os
+
 from matplotlib.backends.backend_pdf import PdfPages
 
 from elfie.utils import write_json_file
