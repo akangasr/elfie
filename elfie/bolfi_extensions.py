@@ -192,8 +192,9 @@ class BolfiInferenceTask():
         return ret
 
     def plot(self, pdf, figsize):
-        if self.result.model._gp is None:
+        if self.post is None:
             return
+
         fig = pl.figure(figsize=figsize)
         try:
             self.post.model._gp.plot()
