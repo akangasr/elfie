@@ -158,7 +158,7 @@ class MPIClient(ClientBase):
     @property
     def num_cores(self):
         """ number of MPI workers """
-        return self.size
+        return self.size - 1
 
     @property
     def is_full(self):
