@@ -4,7 +4,6 @@ import numpy as np
 import logging
 logger = logging.getLogger(__name__)
 
-#with PdfPages(self.pdf_file) as pdf:
 
 def inference_experiment(inference_factory,
                          ground_truth=None,
