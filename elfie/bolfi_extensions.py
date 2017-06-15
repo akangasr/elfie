@@ -1,6 +1,10 @@
 import copy
+import traceback
 import numpy as np
 import GPy
+
+import matplotlib
+from matplotlib import pyplot as pl
 
 from elfi.methods.bo.gpy_regression import GPyRegression
 from elfi.methods.methods import BOLFI
@@ -134,7 +138,6 @@ class BolfiInferenceTask():
         self.ML_val = None
         self.MAP = dict()
         self.MAP_val = None
-        self.order = None
         self.pool = pool
         self.paramnames = paramnames
         self.simuname = simuname
@@ -173,7 +176,6 @@ class BolfiInferenceTask():
         """ Computes MAP sample """
         self.MAP = dict()
         self.MAP_val = None
-        self.order = None
         for idx, sample in self.samples.items():
             x = np.array([sample["X"][k] for k in self.paramnames])
             lp = self.post.logpdf(x)
@@ -182,12 +184,12 @@ class BolfiInferenceTask():
                 self.MAP = sample["X"]
 
     def simulate_data(self, with_values):
-        return self.model.generate(batch_size=1, with_values=with_values)[self.simuname][0]
+        return self.model.generate(with_values=with_values)[self.simuname][0]
 
     def compute_discrepancy_with_data(self, with_values, new_data):
         old_data = self.model.computation_context.observed[self.simuname]
         self.model.computation_context.observed[self.simuname] = new_data
-        ret = self.model.generate(batch_size=1, with_values=with_values)[self.discname][0]
+        ret = self.model.generate(with_values=with_values)[self.discname][0]
         self.model.computation_context.observed[self.simuname] = old_data
         return ret
 
@@ -195,26 +197,52 @@ class BolfiInferenceTask():
         if self.post is None:
             return
 
+        logger.info("Plotting posterior..")
         fig = pl.figure(figsize=figsize)
         try:
             self.post.model._gp.plot()
-        except:
-            fig.text(0.02, 0.02, "Was not able to plot GP model")
+        except Exception as e:
+            fig.text(0.02, 0.02, "Was not able to plot GP model: {}".format(e))
+            tb = traceback.format_exc()
+            logger.critical(tb)
         pdf.savefig()
         pl.close()
 
-        if len(self.order) == 2:
+        if len(self.paramnames) == 1:
+            fig = pl.figure(figsize=figsize)
+            try:
+                pl.xlabel(self.paramnames[0], fontsize=20)
+                pl.ylabel("Unnormalized logl", fontsize=20)
+                locs = np.linspace(self.params.bounds[0][0], self.params.bounds[0][1], 100)
+                vals = [self.post._unnormalized_loglikelihood(np.array(l)) for l in locs]
+                pl.plot(locs, vals)
+                pl.show()
+            except Exception as e:
+                fig.text(0.02, 0.02, "Was not able to plot posterior: {}".format(e))
+                tb = traceback.format_exc()
+                logger.critical(tb)
+            pdf.savefig()
+            pl.close()
+
+        if len(self.paramnames) == 2:
             fig, ax = pl.subplots(1,1,figsize=figsize)
             try:
-                ax.set_xlabel(self.order[0], fontsize=20)
-                ax.set_ylabel(self.order[1], fontsize=20)
-                vals = eval_2d_mesh(bounds[0][0], bounds[1][0], bounds[0][1], bounds[1][1], 100, 100, self.post.pdf)
+                ax.set_title("Unnormalized logl")
+                ax.set_xlabel(self.paramnames[0], fontsize=20)
+                ax.set_ylabel(self.paramnames[1], fontsize=20)
+                vals = eval_2d_mesh(self.params.bounds[0][0],
+                                    self.params.bounds[1][0],
+                                    self.params.bounds[0][1],
+                                    self.params.bounds[1][1],
+                                    100, 100, self.post._unnormalized_loglikelihood)
                 CS = ax.contourf(vals[0], vals[1], vals[2] / np.max(vals[2]), cmap='hot')
                 cbar_ax = fig.add_axes([0.95, 0.2, 0.03, 0.65]) # left, bottom, width, height
                 fig.colorbar(CS, cax=cbar_ax)
                 pl.show()
-            except:
-                fig.text(0.02, 0.02, "Was not able to plot posterior")
+            except Exception as e:
+                fig.text(0.02, 0.02, "Was not able to plot posterior: {}".format(e))
+                tb = traceback.format_exc()
+                logger.critical(tb)
             pdf.savefig()
             pl.close()
 

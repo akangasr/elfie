@@ -32,7 +32,7 @@ def inference_experiment(inference_factory,
         ret["post_duration"] = post_end - post_start
         ret["post"] = "TODO" #inference_task.post.to_dict()
         ret["MAP"] = inference_task.MAP
-        ret["MAP_val"] = inference_task.MAP_val
+        ret["MAP_val"] = float(inference_task.MAP_val)
 
         if pdf is not None:
             logger.info("Plotting")
@@ -47,6 +47,9 @@ def inference_experiment(inference_factory,
             logger.info("Computing prediction errors")
             ret["ML_disc"] = inference_task.compute_discrepancy_with_data(ret["ML"], test_data)
             ret["MAP_disc"] = inference_task.compute_discrepancy_with_data(ret["MAP"], test_data)
+
+        print(ret)
+        return ret
 
 
 def print_graph(data, name):

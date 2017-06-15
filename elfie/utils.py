@@ -40,5 +40,5 @@ def eval_2d_mesh(xmin, ymin, xmax, ymax, nx, ny, eval_fun):
     Z = np.zeros((leny, lenx))
     for i in range(leny):
         for j in range(lenx):
-            Z[i][j] = eval_fun([X[i][j], Y[i][j]])
+            Z[i][j] = eval_fun(np.array([X[i][j], Y[i][j]]))
     return (X, Y, Z)
