@@ -1,6 +1,8 @@
 import json
 import numpy as np
 
+import elfi
+
 import logging
 logger = logging.getLogger(__name__)
 
