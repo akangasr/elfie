@@ -7,12 +7,13 @@ import matplotlib
 from matplotlib import pyplot as pl
 
 from elfi.methods.bo.gpy_regression import GPyRegression
-from elfi.methods.methods import BOLFI
+from elfi.methods.methods import BOLFI, Rejection
 from elfi.methods.results import BolfiPosterior
 from elfi.methods.bo.acquisition import UniformAcquisition, LCBSC
 from elfi.store import OutputPool
 
 from elfie.acquisition import GridAcquisition
+from elfie.outputpool_extensions import SerializableOutputPool
 from elfie.utils import eval_2d_mesh
 
 import logging
@@ -42,7 +43,9 @@ class BolfiParams():
             acq_opt_iterations=100,
             seed=1,
             simulator_node_name="simulator",
-            discrepancy_node_name="discrepancy"):
+            observed_node_name="summary",
+            discrepancy_node_name="discrepancy",
+            pool=None):
         for k, v in locals().items():
             setattr(self, k, v)
 
@@ -100,7 +103,10 @@ class BolfiFactory():
         """
         gp = self._gp()
         acquisition = self._acquisition(gp)
-        pool = OutputPool((self.params.discrepancy_node_name, ) + tuple(self.model.parameters))
+        if self.params.pool is None:
+            pool = SerializableOutputPool((self.params.discrepancy_node_name, ) + tuple(self.model.parameters))
+        else:
+            pool = self.params.pool
         bolfi = BOLFI(model=self.model,
                       target=self.params.discrepancy_node_name,
                       target_model=gp,
@@ -118,6 +124,7 @@ class BolfiFactory():
                                   pool,
                                   self.model.parameters,
                                   self.params.simulator_node_name,
+                                  self.params.observed_node_name,
                                   self.params.discrepancy_node_name)
 
     def to_dict(self):
@@ -128,7 +135,7 @@ class BolfiFactory():
 
 
 class BolfiInferenceTask():
-    def __init__(self, bolfi, model, params, pool, paramnames, simuname, discname):
+    def __init__(self, bolfi, model, params, pool, paramnames, simuname, obsnodename, discname):
         self.bolfi = bolfi
         self.model = model
         self.params = params
@@ -141,6 +148,7 @@ class BolfiInferenceTask():
         self.pool = pool
         self.paramnames = paramnames
         self.simuname = simuname
+        self.obsnodename = obsnodename
         self.discname = discname
 
     def do_sampling(self):
@@ -184,13 +192,35 @@ class BolfiInferenceTask():
                 self.MAP = sample["X"]
 
     def simulate_data(self, with_values):
-        return self.model.generate(with_values=with_values)[self.simuname][0]
+        return self.model.generate(with_values=with_values)[self.simuname].data
 
-    def compute_discrepancy_with_data(self, with_values, new_data):
-        old_data = self.model.computation_context.observed[self.simuname]
-        self.model.computation_context.observed[self.simuname] = new_data
-        ret = self.model.generate(with_values=with_values)[self.discname][0]
-        self.model.computation_context.observed[self.simuname] = old_data
+    def compute_from_model(self, node_names, with_values_list, new_data=None):
+        """ Compute values from model nodes, in parallel, using parameter values from with_values_list
+            and optionally coditioned on on the new observation data.
+        """
+        if type(with_values_list) != list:
+            logger.critical("With_values should be a list of elfi-compatible 'with_values'-dictionaries")
+            assert False
+        pool = SerializableOutputPool(node_names)
+        for i, with_values in enumerate(with_values_list):
+            pool.add_batch(with_values, batch_index=i)
+        rej = Rejection(self.model[self.discname], pool=pool, batch_size=1)
+        if new_data is not None:
+            old_data = self.model.computation_context.observed[self.obsnodename]
+            self.model.computation_context.observed[self.obsnodename] = new_data
+        rej.sample(len(with_values_list), quantile=1)
+        if new_data is not None:
+            self.model.computation_context.observed[self.obsnodename] = old_data
+        ret = list()
+        for i in range(len(with_values_list)):
+            r = dict()
+            batch = pool.get_batch(i)
+            for n in node_names:
+                val = batch[n][0]  # assume length 1
+                if hasattr(val, "data"):  # data containers
+                    val = val.data
+                r[n] = val
+            ret.append(r)
         return ret
 
     def plot(self, pdf, figsize):
