@@ -257,16 +257,16 @@ class BolfiInferenceTask():
         if len(self.paramnames) == 2:
             fig, ax = pl.subplots(1,1,figsize=figsize)
             try:
-                ax.set_title("Unnormalized logl")
+                ax.set_title("Unnormalized likelihood")
                 ax.set_xlabel(self.paramnames[0], fontsize=20)
                 ax.set_ylabel(self.paramnames[1], fontsize=20)
                 vals = eval_2d_mesh(self.params.bounds[0][0],
                                     self.params.bounds[1][0],
                                     self.params.bounds[0][1],
                                     self.params.bounds[1][1],
-                                    100, 100, self.post._unnormalized_loglikelihood)
+                                    100, 100, self.post._unnormalized_likelihood)
                 CS = ax.contourf(vals[0], vals[1], vals[2] / np.max(vals[2]), cmap='hot')
-                cbar_ax = fig.add_axes([0.95, 0.2, 0.03, 0.65]) # left, bottom, width, height
+                cbar_ax = fig.add_axes([0.91, 0.2, 0.03, 0.65]) # left, bottom, width, height
                 fig.colorbar(CS, cax=cbar_ax)
                 pl.show()
             except Exception as e:
@@ -275,8 +275,4 @@ class BolfiInferenceTask():
                 logger.critical(tb)
             pdf.savefig()
             pl.close()
-
-
-
-
 
