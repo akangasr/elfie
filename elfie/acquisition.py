@@ -1,6 +1,8 @@
 import numpy as np
+import scipy as sp
 
-from elfi.methods.bo.acquisition import AcquisitionBase
+from elfi.methods.bo.acquisition import AcquisitionBase, LCBSC
+from elfi.methods.bo.utils import minimize
 
 import logging
 logger = logging.getLogger(__name__)
@@ -34,4 +36,39 @@ class GridAcquisition(AcquisitionBase):
                 idx = int(idx / l)
                 ret[i, j] = tics[mod]
         return ret
+
+
+class BetterLCBSC(LCBSC):
+
+    def acquire(self, n_values, pending_locations=None, t=None):
+        """ Replaced multivariate_normal with set of independent truncnorms.
+            Noise cov should be a list now, not 2D array.
+        """
+
+        logger.debug('Acquiring {} values'.format(n_values))
+
+        obj = lambda x: self.evaluate(x, t)
+        grad_obj = lambda x: self.evaluate_grad(x, t)
+        minloc, minval = minimize(obj, grad_obj, self.model.bounds, self.prior, self.n_inits, self.max_opt_iters)
+        x = np.tile(minloc, (n_values, 1))
+
+        # add some noise for more efficient exploration
+        if max(self.noise_cov) <= 0:
+            return x
+
+        for i in range(n_values):
+            for j in range(x.shape[1]):
+                bounds = self.model.bounds[j]
+                mean = x[i][j]
+                try:
+                    # maybe list
+                    std = self.noise_cov[j]
+                except:
+                    # assume value
+                    std = self.noise_cov
+                a, b = (bounds[0] - mean) / std, (bounds[1] - mean) / std
+                x[i][j] = sp.stats.truncnorm.rvs(a, b, loc=mean, scale=std, size=1, random_state=self.random_state)
+
+        return x
+
 
