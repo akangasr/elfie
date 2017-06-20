@@ -44,3 +44,12 @@ def eval_2d_mesh(xmin, ymin, xmax, ymax, nx, ny, eval_fun):
         for j in range(lenx):
             Z[i][j] = eval_fun(np.array([X[i][j], Y[i][j]]))
     return (X, Y, Z)
+
+def pretty(param_dict):
+    ret = ["("]
+    for k in sorted(param_dict.keys()):
+        ret.append("{}={:.3f}".format(k.split("_",1)[1], param_dict[k]))  # assume there is the ugly prefix, remove it
+        ret.append(",")
+    ret[-1] = ")"
+    return "".join(ret)
+
