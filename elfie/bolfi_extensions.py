@@ -231,14 +231,16 @@ class BolfiInferenceTask():
                 if hasattr(val, "data"):  # data containers
                     val = val.data
                 r[n] = val
+            logger.debug("Computed values of nodes {} with values {}".format(node_names, values))
             ret.append(r)
         return ret
 
-    def plot(self, pdf, figsize):
+
+    def plot_post(self, pdf, figsize):
         if self.post is None:
             return
 
-        logger.info("Plotting posterior..")
+        logger.debug("Plotting GP model")
         fig = pl.figure(figsize=figsize)
         try:
             self.post.model._gp.plot()
@@ -249,41 +251,48 @@ class BolfiInferenceTask():
         pdf.savefig()
         pl.close()
 
-        if len(self.paramnames) == 1:
-            fig = pl.figure(figsize=figsize)
-            try:
-                pl.xlabel(self.paramnames[0], fontsize=20)
-                pl.ylabel("Unnormalized logl", fontsize=20)
-                locs = np.linspace(self.params.bounds[0][0], self.params.bounds[0][1], 100)
-                vals = [self.post._unnormalized_loglikelihood(np.array(l)) for l in locs]
-                pl.plot(locs, vals)
-                pl.show()
-            except Exception as e:
-                fig.text(0.02, 0.02, "Was not able to plot posterior: {}".format(e))
-                tb = traceback.format_exc()
-                logger.critical(tb)
-            pdf.savefig()
-            pl.close()
+        for fname, fun in [("GP mean", lambda x: self.post.model.predict(x)[0]),
+                           ("GP std", lambda x: self.post.model.predict(x)[1]),
+                           ("Prior density", self.post.prior.pdf),
+                           ("Unnormalized likelihood", self.post._unnormalized_likelihood),
+                           ("Unnormalized posterior", self.post.pdf)]:
+            if len(self.paramnames) == 1:
+                logger.debug("Plotting {}".format(fname))
+                fig = pl.figure(figsize=figsize)
+                try:
+                    pl.xlabel(self.paramnames[0], fontsize=20)
+                    pl.ylabel(fname, fontsize=20)
+                    locs = np.linspace(self.params.bounds[0][0], self.params.bounds[0][1], 100)
+                    vals = [fun(np.array(l)) for l in locs]
+                    pl.plot(locs, vals)
+                    pl.show()
+                except Exception as e:
+                    fig.text(0.02, 0.02, "Was not able to plot {}: {}".format(fname, e))
+                    tb = traceback.format_exc()
+                    logger.critical(tb)
+                pdf.savefig()
+                pl.close()
 
-        if len(self.paramnames) == 2:
-            fig, ax = pl.subplots(1,1,figsize=figsize)
-            try:
-                ax.set_title("Unnormalized likelihood")
-                ax.set_xlabel(self.paramnames[0], fontsize=20)
-                ax.set_ylabel(self.paramnames[1], fontsize=20)
-                vals = eval_2d_mesh(self.params.bounds[0][0],
-                                    self.params.bounds[1][0],
-                                    self.params.bounds[0][1],
-                                    self.params.bounds[1][1],
-                                    100, 100, self.post._unnormalized_likelihood)
-                CS = ax.contourf(vals[0], vals[1], vals[2] / np.max(vals[2]), cmap='hot')
-                cbar_ax = fig.add_axes([0.91, 0.2, 0.03, 0.65]) # left, bottom, width, height
-                fig.colorbar(CS, cax=cbar_ax)
-                pl.show()
-            except Exception as e:
-                fig.text(0.02, 0.02, "Was not able to plot posterior: {}".format(e))
-                tb = traceback.format_exc()
-                logger.critical(tb)
-            pdf.savefig()
-            pl.close()
+            if len(self.paramnames) == 2:
+                logger.debug("Plotting {}".format(fname))
+                fig, ax = pl.subplots(1,1,figsize=figsize)
+                try:
+                    ax.set_title(fname)
+                    ax.set_xlabel(self.paramnames[0], fontsize=20)
+                    ax.set_ylabel(self.paramnames[1], fontsize=20)
+                    vals = eval_2d_mesh(self.params.bounds[0][0],
+                                        self.params.bounds[1][0],
+                                        self.params.bounds[0][1],
+                                        self.params.bounds[1][1],
+                                        100, 100, fun)
+                    CS = ax.contourf(vals[0], vals[1], vals[2] / max(np.max(vals[2]), 1e-5), cmap='hot')
+                    cbar_ax = fig.add_axes([0.91, 0.2, 0.03, 0.65]) # left, bottom, width, height
+                    fig.colorbar(CS, cax=cbar_ax)
+                    pl.show()
+                except Exception as e:
+                    fig.text(0.02, 0.02, "Was not able to plot {}: {}".format(fname, e))
+                    tb = traceback.format_exc()
+                    logger.critical(tb)
+                pdf.savefig()
+                pl.close()
 

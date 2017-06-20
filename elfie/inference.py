@@ -3,7 +3,7 @@ import traceback
 import numpy as np
 
 from elfie.outputpool_extensions import SerializableOutputPool
-from elfie.utils import read_json_file
+from elfie.utils import read_json_file, pretty
 
 import logging
 logger = logging.getLogger(__name__)
@@ -11,9 +11,11 @@ logger = logging.getLogger(__name__)
 
 def inference_experiment(inference_factory,
                          ground_truth=None,
+                         obs_data=None,
                          test_data=None,
                          pdf=None,
-                         figsize=(8.27, 11.69)):
+                         figsize=(8.27, 11.69),
+                         plot_data=None):
 
         inference_task = inference_factory.get()
         ret = dict()
@@ -22,7 +24,7 @@ def inference_experiment(inference_factory,
             SamplingPhase(),
             PosteriorAnalysisPhase(),
             PointEstimateSimulationPhase(),
-            PlottingPhase(pdf=pdf, figsize=figsize),
+            PlottingPhase(pdf=pdf, figsize=figsize, obs_data=obs_data, test_data=test_data, plot_data=plot_data),
             GroundTruthErrorPhase(ground_truth=ground_truth),
             PredictionErrorPhase(test_data=test_data),
             ]
@@ -39,7 +41,7 @@ class InferencePhase():
 
     def run(self, inference_task, ret):
         for k in self.req:
-            if k not in ret.keys():
+            if ret is None or k not in ret.keys():
                 logger.warning("Can not run {} phase as {} does not exist!".format(self.name, k))
                 return
         try:
@@ -80,36 +82,57 @@ class PosteriorAnalysisPhase(InferencePhase):
     def _run(self, inference_task, ret):
         post_start = time.time()
         inference_task.compute_posterior()
+        inference_task.compute_ML()
         inference_task.compute_MAP()
         post_end = time.time()
         ret["post_duration"] = post_end - post_start
         ret["post"] = "TODO" #inference_task.post.to_dict()
+        ret["ML"] = inference_task.ML
+        ret["ML_val"] = float(inference_task.ML_val)
         ret["MAP"] = inference_task.MAP
-        ret["MAP_val"] = float(inference_task.MAP_val)
+        ret["MAP_val"] = float(inference_task.MAP_val)  # TODO: find points with ML and MAP values, also extract discerpancies
         return ret
 
 
 class PointEstimateSimulationPhase(InferencePhase):
 
-    def __init__(self, name="Point estimate simulation", requirements=["ML", "MAP"]):
+    def __init__(self, name="Point estimate simulation", requirements=["MD", "ML", "MAP"]):
         InferencePhase.__init__(self, name, requirements)
 
     def _run(self, inference_task, ret):
-        ret["ML_sim"], ret["MAP_sim"] = inference_task.compute_from_model([inference_task.obsnodename],
-                                                                          [ret["ML"], ret["MAP"]])
+        ret["MD_sim"], ret["ML_sim"], ret["MAP_sim"] = inference_task.compute_from_model([inference_task.obsnodename],
+                                                                                         [ret["MD"], ret["ML"], ret["MAP"]])
+        ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename]
+        ret["ML_sim"] = ret["ML_sim"][inference_task.obsnodename]
+        ret["MAP_sim"] = ret["MAP_sim"][inference_task.obsnodename]
         return ret
 
 
 class PlottingPhase(InferencePhase):
 
-    def __init__(self, name="Plotting", requirements=["sample_pool"], pdf=None, figsize=(8.27, 11.69)):
+    def __init__(self, name="Plotting", requirements=["sample_pool"], pdf=None, figsize=(8.27, 11.69),
+                 obs_data=None, test_data=None, plot_data=None):
         InferencePhase.__init__(self, name, requirements)
         self.pdf = pdf
         self.figsize = figsize
+        self.obs_data = obs_data
+        self.test_data = test_data
+        self.plot_data = plot_data
 
     def _run(self, inference_task, ret):
         if self.pdf is not None:
-            inference_task.plot(self.pdf, self.figsize)
+            inference_task.plot_post(self.pdf, self.figsize)
+            if self.plot_data is not None:
+                if "MD_sim" in ret.keys():
+                    self.plot_data(self.pdf, self.figsize, ret["MD_sim"], "Minimum discrepancy sample at {} (discrepancy {:.2f})".format(pretty(ret["MD"]), ret["MD_val"]))
+                if "ML_sim" in ret.keys():
+                    self.plot_data(self.pdf, self.figsize, ret["ML_sim"], "ML sample at {} (discrepancy {})".format(pretty(ret["ML"]), "TODO"))
+                if "MAP_sim" in ret.keys():
+                    self.plot_data(self.pdf, self.figsize, ret["MAP_sim"], "MAP sample at {} (discrepancy {})".format(pretty(ret["MAP"]), "TODO"))
+                if self.obs_data is not None:
+                    self.plot_data(self.pdf, self.figsize, self.obs_data, "Observation data")
+                if self.test_data is not None:
+                    self.plot_data(self.pdf, self.figsize, self.test_data, "Test data")
         else:
             logger.info("Pass, no pdf file.")
         return ret
