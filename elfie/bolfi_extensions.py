@@ -7,12 +7,12 @@ import matplotlib
 from matplotlib import pyplot as pl
 
 from elfi.methods.bo.gpy_regression import GPyRegression
-from elfi.methods.methods import BOLFI, Rejection
-from elfi.methods.results import BolfiPosterior
+from elfi.methods.parameter_inference import BOLFI, Rejection
+from elfi.methods.posteriors import BolfiPosterior
 from elfi.methods.bo.acquisition import UniformAcquisition, LCBSC
 from elfi.store import OutputPool
 
-from elfie.acquisition import GridAcquisition
+from elfie.acquisition import GridAcquisition, BetterLCBSC
 from elfie.outputpool_extensions import SerializableOutputPool
 from elfie.utils import eval_2d_mesh
 
@@ -66,11 +66,11 @@ class BolfiFactory():
     def __init__(self, model, params):
         self.model = model
         self.params = params
-        if len(self.model.parameters) < 1:
+        if len(self.model.parameter_names) < 1:
             raise ValueError("Task must have at least one parameter.")
-        if len(self.params.bounds) != len(self.model.parameters):
+        if len(self.params.bounds) != len(self.model.parameter_names):
             raise ValueError("Number of ask parameters (was {}) must agree with bounds (was {})."\
-                    .format(len(self.model.parameters), len(self.params.bounds)))
+                    .format(len(self.model.parameter_names), len(self.params.bounds)))
 
     def _gp(self):
         input_dim = len(self.params.bounds)
@@ -90,11 +90,11 @@ class BolfiFactory():
         if self.params.sampling_type == "grid":
             return GridAcquisition(tics=self.params.grid_tics,
                                    model=gp)
-        if self.params.sampling_type == "BO":
-            return LCBSC(delta=self.params.acq_delta,
-                         max_opt_iter=self.params.acq_opt_iterations,
-                         noise_cov=self.params.acq_noise_cov,
-                         model=gp)
+        if self.params.sampling_type == "bo":
+            return BetterLCBSC(delta=self.params.acq_delta,
+                               max_opt_iters=self.params.acq_opt_iterations,
+                               noise_cov=self.params.acq_noise_cov,
+                               model=gp)
         logger.critical("Unknown sampling type '{}', aborting!".format(self.params.sampling_type))
         assert False
 
@@ -104,11 +104,11 @@ class BolfiFactory():
         gp = self._gp()
         acquisition = self._acquisition(gp)
         if self.params.pool is None:
-            pool = SerializableOutputPool((self.params.discrepancy_node_name, ) + tuple(self.model.parameters))
+            pool = SerializableOutputPool((self.params.discrepancy_node_name, ) + tuple(self.model.parameter_names))
         else:
             pool = self.params.pool
         bolfi = BOLFI(model=self.model,
-                      target=self.params.discrepancy_node_name,
+                      target_name=self.params.discrepancy_node_name,
                       target_model=gp,
                       acquisition_method=acquisition,
                       bounds=self.params.bounds,
@@ -122,7 +122,7 @@ class BolfiFactory():
                                   self.model,
                                   copy.copy(self.params),
                                   pool,
-                                  self.model.parameters,
+                                  self.model.parameter_names,
                                   self.params.simulator_node_name,
                                   self.params.observed_node_name,
                                   self.params.discrepancy_node_name)
@@ -204,7 +204,7 @@ class BolfiInferenceTask():
         pool = SerializableOutputPool(node_names)
         for i, with_values in enumerate(with_values_list):
             pool.add_batch(with_values, batch_index=i)
-        rej = Rejection(self.model[self.discname], pool=pool, batch_size=1)
+        rej = Rejection(self.model, discrepancy_name=self.model[self.discname], pool=pool, batch_size=1)
         if new_data is not None:
             old_data = self.model.computation_context.observed[self.obsnodename]
             self.model.computation_context.observed[self.obsnodename] = new_data
@@ -212,7 +212,7 @@ class BolfiInferenceTask():
         if new_data is not None:
             self.model.computation_context.observed[self.obsnodename] = old_data
         ret = list()
-        for i in range(len(with_values_list)):
+        for i, values in enumerate(with_values_list):
             r = dict()
             batch = pool.get_batch(i)
             for n in node_names:
