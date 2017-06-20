@@ -155,11 +155,11 @@ class BolfiInferenceTask():
         """ Computes BO samples """
         self.bolfi.infer(self.params.n_samples)
 
-    def compute_samples_and_ML(self):
-        """ Extracts samples from pool and computes ML sample """
+    def compute_samples_and_MD(self):
+        """ Extracts samples from pool and computes min discrepancy sample """
         self.samples = dict()
-        self.ML = dict()
-        self.ML_val = None
+        self.MD = dict()
+        self.MD_val = None
         idx = 0
         while True:
             X = self.pool.get_batch(idx, self.paramnames)
@@ -170,15 +170,26 @@ class BolfiInferenceTask():
             x = dict()
             for k, v in X.items():
                 x[k] = float(v)
-            if self.ML_val is None or y < self.ML_val:
-                self.ML_val = y
-                self.ML = x
+            if self.MD_val is None or y < self.MD_val:
+                self.MD_val = y
+                self.MD = x
             self.samples[idx] = {"X": x, "Y": y}
             idx += 1
 
     def compute_posterior(self):
         """ Constructs posterior """
-        self.post = self.bolfi.infer_posterior()
+        self.post = self.bolfi.extract_posterior()
+
+    def compute_ML(self):
+        """ Computes ML sample """
+        self.ML = dict()
+        self.ML_val = None
+        for idx, sample in self.samples.items():
+            x = np.array([sample["X"][k] for k in self.paramnames])
+            logl = self.post._unnormalized_loglikelihood(x)
+            if self.ML_val is None or logl > self.ML_val:
+                self.ML_val = logl
+                self.ML = sample["X"]
 
     def compute_MAP(self):
         """ Computes MAP sample """
@@ -186,9 +197,9 @@ class BolfiInferenceTask():
         self.MAP_val = None
         for idx, sample in self.samples.items():
             x = np.array([sample["X"][k] for k in self.paramnames])
-            lp = self.post.logpdf(x)
-            if self.MAP_val is None or lp > self.ML_val:
-                self.MAP_val = lp
+            logp = self.post.logpdf(x)
+            if self.MAP_val is None or logp > self.MAP_val:
+                self.MAP_val = logp
                 self.MAP = sample["X"]
 
     def simulate_data(self, with_values):
