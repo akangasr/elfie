@@ -14,5 +14,6 @@ def run_and_report(experiment,
 
     with PdfPages(pdf_file) as pdf:
         log = experiment(pdf=pdf, figsize=figsize)
-        write_json_file(log_file, log)
+
+    write_json_file(log_file, log)
 

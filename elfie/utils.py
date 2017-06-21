@@ -1,4 +1,5 @@
 import json
+import traceback
 import numpy as np
 
 import elfi
@@ -8,11 +9,16 @@ logger = logging.getLogger(__name__)
 
 
 def write_json_file(filename, data):
-    f = open(filename, "w")
-    json.dump(data, f)
-    f.close()
-    logger.info("Wrote {}".format(filename))
-
+    try:
+        f = open(filename, "w")
+        json.dump(data, f)
+        f.close()
+        logger.info("Wrote {}".format(filename))
+    except Exception as e:
+        logger.critical("Could not write the following to file as JSON:")
+        logger.critical(data)
+        tb = traceback.format_exc()
+        logger.critical(tb)
 
 def read_json_file(filename):
     f = open(filename, "r")
