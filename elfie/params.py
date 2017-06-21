@@ -34,7 +34,7 @@ class ModelParams():
         return ret
 
     def get_bounds(self):
-        return [(p["minv"], p["maxv"]) for p in self.parameters if p["distr"] is not "constant"]
+        return {p["name"]: (p["minv"], p["maxv"]) for p in self.parameters if p["distr"] is not "constant"}
 
     def get_acq_noises(self):
         return [p["acq_noise"] for p in self.parameters if p["distr"] is not "constant"]
