@@ -6,10 +6,18 @@ source "${FILEDIR}/parameters.sh"
 if [[ "$1" != "--only-venv" ]];
 then
     >&2 echo "Loading modules.."
-    for m in "${ELFIE_MODULES[@]}"
-    do
-        module load ${m}
-    done
+    # saved as ~/.lmod.d/<name>, eg. remove the file to redefine
+    module restore ${ELFIE_MODULE_COLLECTION} 2&> /dev/null
+    if [ $? -eq 0 ];
+    then
+        >&2 echo "Loaded collection ${ELFIE_MODULE_COLLECTION}"
+    else
+        for m in "${ELFIE_MODULES[@]}"
+        do
+            module load ${m}
+        done
+        module save ${ELFIE_MODULE_COLLECTION}
+    fi
     module list
 fi
 
