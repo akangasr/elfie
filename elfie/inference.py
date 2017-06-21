@@ -102,9 +102,9 @@ class PointEstimateSimulationPhase(InferencePhase):
     def _run(self, inference_task, ret):
         ret["MD_sim"], ret["ML_sim"], ret["MAP_sim"] = inference_task.compute_from_model([inference_task.obsnodename],
                                                                                          [ret["MD"], ret["ML"], ret["MAP"]])
-        ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename]
-        ret["ML_sim"] = ret["ML_sim"][inference_task.obsnodename]
-        ret["MAP_sim"] = ret["MAP_sim"][inference_task.obsnodename]
+        ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename].tolist()
+        ret["ML_sim"] = ret["ML_sim"][inference_task.obsnodename].tolist()
+        ret["MAP_sim"] = ret["MAP_sim"][inference_task.obsnodename].tolist()
         return ret
 
 
@@ -162,9 +162,12 @@ class PredictionErrorPhase(InferencePhase):
 
     def _run(self, inference_task, ret):
         if self.test_data is not None:
-            ret["MD_sim"], ret["ML_sim"], ret["MAP_sim"] = inference_task.compute_from_model([inference_task.discname],
+            ret["MD_err"], ret["ML_err"], ret["MAP_err"] = inference_task.compute_from_model([inference_task.discname],
                                                                                              [ret["MD"], ret["ML"], ret["MAP"]],
-                                                                                             new_data=test_data)
+                                                                                             new_data=self.test_data)
+            ret["MD_err"] = float(ret["MD_err"][inference_task.discname])
+            ret["ML_err"] = float(ret["ML_err"][inference_task.discname])
+            ret["MAP_err"] = float(ret["MAP_err"][inference_task.discname])
         else:
             logger.info("Pass, no test data.")
         return ret
