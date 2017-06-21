@@ -203,7 +203,7 @@ class BolfiInferenceTask():
                 self.MAP = sample["X"]
 
     def simulate_data(self, with_values):
-        return self.model.generate(with_values=with_values)[self.simuname].data
+        return self.model.generate(with_values=with_values)[self.simuname]
 
     def compute_from_model(self, node_names, with_values_list, new_data=None):
         """ Compute values from model nodes, in parallel, using parameter values from with_values_list
@@ -227,11 +227,8 @@ class BolfiInferenceTask():
             r = dict()
             batch = pool.get_batch(i)
             for n in node_names:
-                val = batch[n][0]  # assume length 1
-                if hasattr(val, "data"):  # data containers
-                    val = val.data
-                r[n] = val
-            logger.debug("Computed values of nodes {} with values {}".format(node_names, values))
+                r[n] = batch[n][0]  # assume length 1
+            logger.info("Computed values of nodes {} with values {}".format(node_names, values))
             ret.append(r)
         return ret
 
@@ -251,8 +248,8 @@ class BolfiInferenceTask():
         pdf.savefig()
         pl.close()
 
-        for fname, fun in [("GP mean", lambda x: self.post.model.predict(x)[0]),
-                           ("GP std", lambda x: self.post.model.predict(x)[1]),
+        for fname, fun in [("GP mean", lambda x: self.post.model.predict(x)[0][:,0]),
+                           ("GP std", lambda x: self.post.model.predict(x)[1][:,0]),
                            ("Prior density", self.post.prior.pdf),
                            ("Unnormalized likelihood", self.post._unnormalized_likelihood),
                            ("Unnormalized posterior", self.post.pdf)]:
