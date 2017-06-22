@@ -5,6 +5,7 @@ source "${FILEDIR}/parameters.sh"
 
 if [[ "$1" != "--only-venv" ]];
 then
+    module purge
     >&2 echo "Loading modules.."
     # saved as ~/.lmod.d/<name>, eg. remove the file to redefine
     module restore ${ELFIE_MODULE_COLLECTION} 2&> /dev/null

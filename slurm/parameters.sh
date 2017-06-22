@@ -5,11 +5,12 @@ ELFIE_RESULTS="${ELFIE_ROOT}/results"
 ELFIE_VENV="${ELFIE_ROOT}/.venv"
 ELFIE_MODULE_COLLECTION="elfie_modules"
 ELFIE_MODULES=(
-    "Python/3.5.1-goolf-triton-2016b"
-    "OpenMPI/2.0.2-GCC-6.3.0-2.27"
+    "Python/3.6.1-goolfc-triton-2017a"
     )
 ELFIE_OTHER_REQUIREMENTS=()
 ELFIE_GIT_REPOS=(
     "${ELFIE_ROOT}/elfi2"
     "${ELFIE_ROOT}/elfie"
+    "${ELFIE_ROOT}/elfirl"
+    "${ELFIE_ROOT}/cogsciabc"
     )
