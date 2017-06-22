@@ -12,7 +12,7 @@ from elfi.methods.posteriors import BolfiPosterior
 from elfi.methods.bo.acquisition import UniformAcquisition, LCBSC
 from elfi.store import OutputPool
 
-from elfie.acquisition import GridAcquisition, BetterLCBSC
+from elfie.acquisition import GridAcquisition
 from elfie.outputpool_extensions import SerializableOutputPool
 from elfie.utils import eval_2d_mesh
 
@@ -91,10 +91,10 @@ class BolfiFactory():
             return GridAcquisition(tics=self.params.grid_tics,
                                    model=gp)
         if self.params.sampling_type == "bo":
-            return BetterLCBSC(delta=self.params.acq_delta,
-                               max_opt_iters=self.params.acq_opt_iterations,
-                               noise_cov=self.params.acq_noise_cov,
-                               model=gp)
+            return LCBSC(delta=self.params.acq_delta,
+                         max_opt_iters=self.params.acq_opt_iterations,
+                         noise_cov=self.params.acq_noise_cov,
+                         model=gp)
         logger.critical("Unknown sampling type '{}', aborting!".format(self.params.sampling_type))
         assert False
 
