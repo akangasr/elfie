@@ -46,7 +46,8 @@ class BolfiParams():
             observed_node_name="summary",
             discrepancy_node_name="discrepancy",
             pool=None):
-        for k, v in locals().items():
+        d = {k: v for k, v in locals().items()}
+        for k, v in d.items():
             setattr(self, k, v)
 
     def to_dict(self):
