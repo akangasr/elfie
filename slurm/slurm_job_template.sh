@@ -3,7 +3,7 @@
 #SBATCH --time=_TIME_
 #SBATCH --mem-per-cpu=_MEM_
 #SBATCH --constraint=[ivb|wsm]
-#SBATCH -p debug
+#SBATCH -p batch
 #SBATCH -o _OUT_FILE_
 #SBATCH -e _ERR_FILE_
 
@@ -14,6 +14,8 @@ echo "Starting job at ${HOSTNAME}"
 echo "* job id:     _JOBID_"
 echo "* rnd seed:   _SEED_"
 echo "* processes:  _NPROC_"
+echo "* time limit: _TIME_"
+echo "* memory lim: _MEM_"
 echo "* work dir:   _DATA_DIR_"
 echo "* slurm file: _SLURM_FILE_"
 echo "* job file:   _JOB_FILE_"
