@@ -225,7 +225,11 @@ class MPIClient(ClientBase):
         while True:
             for idx in idx_list:
                 if self.is_ready(idx):
-                    return idx, self.ready_tasks[idx].result
+                    if self.ready_tasks[idx] == None:
+                        raise ValueError("Result for task {} already fetched".format(idx))
+                    ret = idx, self.ready_tasks[idx].result
+                    self.ready_tasks[idx] = None  # reduce memory consumption, assume no re-fetching of results
+                    return ret
             self._wait_for_next_ready()
 
     def is_ready(self, idx):
