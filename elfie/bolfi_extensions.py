@@ -35,6 +35,7 @@ class BolfiParams():
             noise_var=0.05,
             kernel_var=0.05,
             kernel_scale=0.1,
+            ARD=False,
             gp_params_optimizer="scg",
             gp_params_max_opt_iters=50,
             gp_params_update_interval=0,
@@ -77,7 +78,8 @@ class BolfiFactory():
         input_dim = len(self.params.bounds)
         kernel = self.params.kernel_class(input_dim=input_dim,
                                           variance=self.params.kernel_var,
-                                          lengthscale=self.params.kernel_scale)
+                                          lengthscale=self.params.kernel_scale,
+                                          ARD=self.params.ARD)
         return GPyRegression(input_dim=input_dim,
                         bounds=self.params.bounds,
                         optimizer=self.params.gp_params_optimizer,

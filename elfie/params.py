@@ -39,6 +39,9 @@ class ModelParams():
     def get_acq_noises(self):
         return [p["acq_noise"] for p in self.parameters if p["distr"] is not "constant"]
 
+    def get_lengthscales(self):
+        return [p["kernel_scale"] for p in self.parameters if p["distr"] is not "constant"]
+
     def get_grid_tics(self):
         return [np.linspace(p["minv"], p["maxv"], p["ntics"]).tolist() for p in self.parameters if p["distr"] is not "constant"]
 
