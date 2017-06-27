@@ -74,11 +74,14 @@ class GPLCA(AcquisitionBase):
         self.L = self.estimate_L()
         self.M = self.estimate_M()
         for i in range(n_values):
-            r = self._acq(p)
-            if pl is None:
-                pl = r[None, :]
+            r = self._acq(pl)
+            print(r)
+            r = np.atleast_2d(r)
+            print(pl, r)
+            if len(pl) == 0:
+                pl = r
             else:
-                pl = np.vstack(pl, r)
+                pl = np.vstack((pl, r))
             ret[i] = r
         return ret
 
@@ -88,7 +91,8 @@ class GPLCA(AcquisitionBase):
         return val
 
     def estimate_L(self):
-        grad_obj = lambda x: -abs(self.a.evaluate_gradient(x, t=0))
+        grad_obj = lambda x: -np.abs(np.linalg.norm(self.a.evaluate_gradient(x, t=0)))
+        print(self.model.bounds)
         loc, val = stochastic_optimization(grad_obj, self.model.bounds, maxiter=1000, polish=True, seed=0)
         return abs(val)
 
