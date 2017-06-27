@@ -15,6 +15,7 @@ def inference_experiment(inference_factory,
                          test_data=None,
                          pdf=None,
                          figsize=(8.27, 11.69),
+                         skip_post=False,
                          plot_data=None):
 
         inference_task = inference_factory.get()
@@ -22,7 +23,7 @@ def inference_experiment(inference_factory,
 
         phases = [
             SamplingPhase(),
-            PosteriorAnalysisPhase(),
+            PosteriorAnalysisPhase(skip=skip_post),
             PointEstimateSimulationPhase(),
             PlottingPhase(pdf=pdf, figsize=figsize, obs_data=obs_data, test_data=test_data, plot_data=plot_data),
             GroundTruthErrorPhase(ground_truth=ground_truth),
@@ -65,7 +66,6 @@ class SamplingPhase(InferencePhase):
     def _run(self, inference_task, ret):
         sampling_start = time.time()
         inference_task.do_sampling()
-        inference_task.compute_samples_and_MD()
         sampling_end = time.time()
         ret["sampling_duration"] = sampling_end - sampling_start
         ret["sample_pool"] = inference_task.pool.to_dict()
@@ -76,10 +76,14 @@ class SamplingPhase(InferencePhase):
 
 class PosteriorAnalysisPhase(InferencePhase):
 
-    def __init__(self, name="Posterior analysis", requirements=["sample_pool"]):
+    def __init__(self, name="Posterior analysis", requirements=["sample_pool"], skip=False):
+        self.skip = skip
         InferencePhase.__init__(self, name, requirements)
 
     def _run(self, inference_task, ret):
+        if self.skip is True:
+            logger.info("Skipping")
+            return ret
         post_start = time.time()
         inference_task.compute_posterior()
         inference_task.compute_ML()
@@ -96,15 +100,20 @@ class PosteriorAnalysisPhase(InferencePhase):
 
 class PointEstimateSimulationPhase(InferencePhase):
 
-    def __init__(self, name="Point estimate simulation", requirements=["MD", "ML", "MAP"]):
+    def __init__(self, name="Point estimate simulation", requirements=["MD"]):
         InferencePhase.__init__(self, name, requirements)
 
     def _run(self, inference_task, ret):
-        ret["MD_sim"], ret["ML_sim"], ret["MAP_sim"] = inference_task.compute_from_model([inference_task.obsnodename],
+        if "MAP" in ret.keys():
+            ret["MD_sim"], ret["ML_sim"], ret["MAP_sim"] = inference_task.compute_from_model([inference_task.obsnodename],
                                                                                          [ret["MD"], ret["ML"], ret["MAP"]])
-        ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename].tolist()
-        ret["ML_sim"] = ret["ML_sim"][inference_task.obsnodename].tolist()
-        ret["MAP_sim"] = ret["MAP_sim"][inference_task.obsnodename].tolist()
+            ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename].tolist()
+            ret["ML_sim"] = ret["ML_sim"][inference_task.obsnodename].tolist()
+            ret["MAP_sim"] = ret["MAP_sim"][inference_task.obsnodename].tolist()
+        else:
+            ret["MD_sim"] = inference_task.compute_from_model([inference_task.obsnodename], [ret["MD"],])
+            ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename].tolist()
+
         return ret
 
 
@@ -140,15 +149,16 @@ class PlottingPhase(InferencePhase):
 
 class GroundTruthErrorPhase(InferencePhase):
 
-    def __init__(self, name="Ground truth error computation", requirements=["MD", "ML", "MAP"], ground_truth=None):
+    def __init__(self, name="Ground truth error computation", requirements=["MD"], ground_truth=None):
         InferencePhase.__init__(self, name, requirements)
         self.ground_truth = ground_truth
 
     def _run(self, inference_task, ret):
         if self.ground_truth is not None:
             ret["MD_err"] = rmse(ret["MD"], self.ground_truth)
-            ret["ML_err"] = rmse(ret["ML"], self.ground_truth)
-            ret["MAP_err"] = rmse(ret["MAP"], self.ground_truth)
+            if "MAP" in ret.keys():
+                ret["ML_err"] = rmse(ret["ML"], self.ground_truth)
+                ret["MAP_err"] = rmse(ret["MAP"], self.ground_truth)
         else:
             logger.info("Pass, no ground truth parameters.")
         return ret
@@ -156,18 +166,24 @@ class GroundTruthErrorPhase(InferencePhase):
 
 class PredictionErrorPhase(InferencePhase):
 
-    def __init__(self, name="Prediction error computation", requirements=["MD", "ML", "MAP"], test_data=None):
+    def __init__(self, name="Prediction error computation", requirements=["MD"], test_data=None):
         InferencePhase.__init__(self, name, requirements)
         self.test_data = test_data
 
     def _run(self, inference_task, ret):
         if self.test_data is not None:
-            ret["MD_err"], ret["ML_err"], ret["MAP_err"] = inference_task.compute_from_model([inference_task.discname],
-                                                                                             [ret["MD"], ret["ML"], ret["MAP"]],
-                                                                                             new_data=self.test_data)
-            ret["MD_err"] = float(ret["MD_err"][inference_task.discname])
-            ret["ML_err"] = float(ret["ML_err"][inference_task.discname])
-            ret["MAP_err"] = float(ret["MAP_err"][inference_task.discname])
+            if "MAP" in ret.keys():
+                ret["MD_err"], ret["ML_err"], ret["MAP_err"] = inference_task.compute_from_model([inference_task.discname],
+                                                                                                 [ret["MD"], ret["ML"], ret["MAP"]],
+                                                                                                 new_data=self.test_data)
+                ret["MD_err"] = float(ret["MD_err"][inference_task.discname])
+                ret["ML_err"] = float(ret["ML_err"][inference_task.discname])
+                ret["MAP_err"] = float(ret["MAP_err"][inference_task.discname])
+            else:
+                ret["MD_err"] = inference_task.compute_from_model([inference_task.discname],
+                                                                  [ret["MD"],],
+                                                                  new_data=self.test_data)
+                ret["MD_err"] = float(ret["MD_err"][inference_task.discname])
         else:
             logger.info("Pass, no test data.")
         return ret

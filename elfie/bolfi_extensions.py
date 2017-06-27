@@ -104,6 +104,15 @@ class BolfiFactory():
     def get(self):
         """ Returns new BolfiExperiment object
         """
+        if self.params.sampling_type == "optimize":
+            return BolfiInferenceTask(None,
+                                      self.model,
+                                      copy.copy(self.params),
+                                      None,
+                                      self.model.parameter_names,
+                                      self.params.simulator_node_name,
+                                      self.params.observed_node_name,
+                                      self.params.discrepancy_node_name)
         gp = self._gp()
         acquisition = self._acquisition(gp)
         if self.params.pool is None:
@@ -156,10 +165,9 @@ class BolfiInferenceTask():
 
     def do_sampling(self):
         """ Computes BO samples """
+        if self.bolfi is None:
+            self._optimize()
         self.bolfi.infer(self.params.n_samples)
-
-    def compute_samples_and_MD(self):
-        """ Extracts samples from pool and computes min discrepancy sample """
         self.samples = dict()
         self.MD = dict()
         self.MD_val = None
@@ -178,6 +186,39 @@ class BolfiInferenceTask():
                 self.MD = x
             self.samples[idx] = {"X": x, "Y": y}
             idx += 1
+
+    def _optimize(self):
+        calls = int(self.params.n_samples)
+
+        def target(x):
+            calls -= 1
+            wv = {p: v for p, v in zip(self.model.parameters, x)}
+            print("Evaluating at {}, {} calls left".format(wv, calls))
+            ret = self.compute_from_model(self.discname, [wv])[0]
+            print("Result: {}".format(ret))
+            return float(ret[self.discname])
+
+        self.MD = dict()
+        self.MD_val = None
+        while calls > 0:
+            x0 = [np.random.uniform(*b) for b in self.bolfi.model.bounds]  # TODO: randomstate?
+            print("Optimization start at {}".format(x0))
+            print("Optimization bounds {}".format(self.bolfi.model.bounds))
+            if calls > 1:
+                r = sp.optimize.minimize(fun=target,
+                                         x0=x0,
+                                         method="L-BFGS-B",
+                                         bounds=self.bolfi.model.bounds,
+                                         options={"disp": True,
+                                                  "maxfun": calls-1},
+                                         )
+                loc = r.x
+            else:
+                loc = x0
+            val = target(r.x)
+            if self.MD_val is None or self.MD_val > val:
+                self.MD = {p: v for p, v in zip(self.model.parameters, r.x)}
+                self.MD_val = val
 
     def compute_posterior(self):
         """ Constructs posterior """
