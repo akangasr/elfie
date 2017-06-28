@@ -39,12 +39,18 @@ class GridAcquisition(AcquisitionBase):
 
 
 def soft_plus(x):
-    return np.log(1.0 + np.exp(float(x)))
+    """ As in Gonzalez et al. 2016 """
+    return float(np.log(1.0 + np.exp(float(x))))
 
-def phi(x, x2, L, M):
-    mean, var = self.model.predict(x2, noiseless=True)
-    z = 1.0 / np.sqrt(2.0 * var) * (L * abs(x - x2) - M + mean)
-    return 0.5 * sp.special.erfc(-z)
+def phi(x, x2, L, M, mean, var):
+    """ As in Gonzalez et al. 2016 except for dimension-wise L """
+    Ldiag = np.diag(L)
+    diff = x - x2
+    mult = np.dot(Ldiag, diff)
+    norm = np.linalg.norm(mult)
+    z = 1.0 / np.sqrt(2.0 * var) * (norm - M + mean)
+    ret = 0.5 * sp.special.erfc(-z)
+    return float(ret)
 
 class GPLCA(AcquisitionBase):
     """ Gaussian Process Lipschitz Constant Approximation (Gonzalez et al. 2016)
@@ -75,31 +81,119 @@ class GPLCA(AcquisitionBase):
         self.M = self.estimate_M()
         for i in range(n_values):
             r = self._acq(pl)
-            print(r)
-            r = np.atleast_2d(r)
-            print(pl, r)
-            if len(pl) == 0:
-                pl = r
-            else:
-                pl = np.vstack((pl, r))
             ret[i] = r
+            r2 = np.atleast_2d(r)
+            if len(pl) == 0:
+                pl = r2
+            else:
+                pl = np.vstack((pl, r2))
         return ret
 
     def estimate_M(self):
-        obj = lambda x: self.a.evaluate(x, t=0)
+        """ Estimate function maximum value """
+        obj = lambda x: self.a.evaluate(x, t=0)  # minimization
         loc, val = stochastic_optimization(obj, self.model.bounds, maxiter=1000, polish=True, seed=0)
-        return val
+        return -1.0 * float(val)  # maximization
 
     def estimate_L(self):
-        grad_obj = lambda x: -np.abs(np.linalg.norm(self.a.evaluate_gradient(x, t=0)))
-        print(self.model.bounds)
-        loc, val = stochastic_optimization(grad_obj, self.model.bounds, maxiter=1000, polish=True, seed=0)
-        return abs(val)
+        """ Return a list of acq surface gradient absolute value max for each dimension """
+        L = list()
+        for i in range(len(self.model.bounds)):
+            grad_obj = lambda x: -np.abs(float(self.a.evaluate_gradient(x, t=0)[0][i]))  # abs max
+            loc, val = stochastic_optimization(grad_obj, self.model.bounds, maxiter=1000, polish=True, seed=0)
+            L.append(abs(val))
+        return L
 
     def _acq(self, pending_locations, t=0):
-        obj = [lambda x: self.g(self.a.evaluate(x, t))]
-        if pending_locations is None:
-            for p in pending_locations:
-                obj.append(lambda x: self.phi(x, p, self.L, self.M) * obj[-1](x))
-        loc, val = stochastic_optimization(obj[-1], self.model.bounds, maxiter=1000, polish=True, seed=0)
+        phis = []
+        if pending_locations is not None:
+            for pl in pending_locations:
+                print("Pending: {}".format(pl))
+                mean, var = self.model.predict(pl, noiseless=True)
+                mean = -1.0 * float(mean)  # maximization
+                var = float(var)
+                phis.append((pl, mean, var))
+
+        def trans(x):
+            # negation as the GPLCA formulation is for maximization
+            return self.g(-1.0 * float(self.a.evaluate(x, t)))
+
+        def pend(x):
+            val = 1.0
+            for pl, mean, var in phis:
+                val *= self.p(x, pl, self.L, self.M, mean, var)
+            return val
+
+        def obj(x):
+            # negation as we use a minimizer to solve a maximization problem
+            return -1.0 * trans(x) * pend(x)
+
+        loc, val = stochastic_optimization(obj, self.model.bounds, maxiter=1000, polish=True, seed=0)
+
+        if True:
+            self._debug_print("GP mean", lambda x: self.a.model.predict(x, noiseless=True)[0])
+            self._debug_print("GP std", lambda x: self.a.model.predict(x, noiseless=True)[1])
+            self._debug_print("Original surface", self.a.evaluate)
+            self._debug_print("Transformed surface", trans)
+            self._debug_print("Pending points modifier", pend)
+            self._debug_print("Final surface (M={:.2f}, L={})".format(self.M,
+                                                                      "".join(["{:.2f} ".format(l) for l in self.L])),
+                              obj, loc)
+
         return loc
+
+
+    def _debug_print(self, name, obj, loc=None):
+        """debug printout"""
+        tics = 20
+        maxv = float("-inf")
+        minv = float("inf")
+        mind = float("inf")
+        minl = None
+        vals = list()
+        xtics = np.linspace(*self.model.bounds[0], tics)
+        ytics = np.linspace(*self.model.bounds[1], tics)
+        for y in ytics:
+            vals.append(list())
+            for x in xtics:
+                l = np.array([x, y])
+                v = float(obj(l))
+                vals[-1].append(v)
+                maxv = max(maxv, v)
+                minv = min(minv, v)
+                if loc is not None:
+                    d = np.linalg.norm(l-loc)
+                    if d < mind:
+                        minl = l
+                        mind = d
+
+        print("{} :".format(name))
+        for y in reversed(range(tics)):
+            line = ["|"]
+            for x in range(tics):
+                l = np.array([xtics[x], ytics[y]])
+                if maxv == minv:
+                    v = 1.0
+                else:
+                    v = (float(vals[y][x])-minv)/(maxv-minv)
+                if loc is not None and np.allclose(minl, l):
+                    line.append("@@")
+                elif v > 0.95:
+                    line.append("XX")
+                elif v > 0.8:
+                    line.append("xx")
+                elif v > 0.6:
+                    line.append("::")
+                elif v > 0.4:
+                    line.append(":.")
+                elif v > 0.2:
+                    line.append("..")
+                elif v > 0.05:
+                    line.append(". ")
+                else:
+                    line.append("  ")
+            line.append("|")
+            print("".join(line))
+        if loc is not None:
+            print("Acquired {}".format(loc))
+
