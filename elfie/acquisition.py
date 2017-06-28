@@ -1,8 +1,9 @@
+from functools import partial
 import numpy as np
 import scipy as sp
 
 from elfi.methods.bo.acquisition import AcquisitionBase
-from elfi.methods.bo.utils import minimize, stochastic_optimization
+from elfi.methods.bo.utils import minimize
 
 import logging
 logger = logging.getLogger(__name__)
@@ -71,16 +72,16 @@ class GPLCA(AcquisitionBase):
         self.p = p
         super(GPLCA, self).__init__(model=self.a.model)
 
-    def acquire(self, n_values, pending_locations=None, t=0):
+    def acquire(self, n_values, pending_locations=None, t=None):
         ret = np.zeros((n_values, len(self.model.bounds)))
         if pending_locations is None:
             pl = None
         else:
             pl = pending_locations[:]
-        self.L = self.estimate_L()
-        self.M = self.estimate_M()
+        self.L = self.estimate_L(t)
+        self.M = self.estimate_M(t)
         for i in range(n_values):
-            r = self._acq(pl)
+            r = self._acq(pl, t)
             ret[i] = r
             r2 = np.atleast_2d(r)
             if len(pl) == 0:
@@ -89,22 +90,22 @@ class GPLCA(AcquisitionBase):
                 pl = np.vstack((pl, r2))
         return ret
 
-    def estimate_M(self):
+    def estimate_M(self, t):
         """ Estimate function maximum value """
-        obj = lambda x: self.a.evaluate(x, t=0)  # minimization
-        loc, val = stochastic_optimization(obj, self.model.bounds, maxiter=1000, polish=True, seed=0)
+        obj = lambda x: self.a.evaluate(x, t=t)  # minimization
+        loc, val = minimize(obj, self.model.bounds)
         return -1.0 * float(val)  # maximization
 
-    def estimate_L(self):
+    def estimate_L(self, t):
         """ Return a list of acq surface gradient absolute value max for each dimension """
         L = list()
         for i in range(len(self.model.bounds)):
-            grad_obj = lambda x: -np.abs(float(self.a.evaluate_gradient(x, t=0)[0][i]))  # abs max
-            loc, val = stochastic_optimization(grad_obj, self.model.bounds, maxiter=1000, polish=True, seed=0)
+            grad_obj = lambda x: -np.abs(float(self.a.evaluate_gradient(x, t=t)[0][i]))  # abs max
+            loc, val = minimize(grad_obj, self.model.bounds)
             L.append(abs(val))
         return L
 
-    def _acq(self, pending_locations, t=0):
+    def _acq(self, pending_locations, t):
         phis = []
         if pending_locations is not None:
             for pl in pending_locations:
@@ -114,7 +115,7 @@ class GPLCA(AcquisitionBase):
                 var = float(var)
                 phis.append((pl, mean, var))
 
-        def trans(x):
+        def trans(x, t):
             # negation as the GPLCA formulation is for maximization
             return self.g(-1.0 * float(self.a.evaluate(x, t)))
 
@@ -124,21 +125,21 @@ class GPLCA(AcquisitionBase):
                 val *= self.p(x, pl, self.L, self.M, mean, var)
             return val
 
-        def obj(x):
+        def obj(x, t):
             # negation as we use a minimizer to solve a maximization problem
-            return -1.0 * trans(x) * pend(x)
+            return -1.0 * trans(x, t) * pend(x)
 
-        loc, val = stochastic_optimization(obj, self.model.bounds, maxiter=1000, polish=True, seed=0)
+        loc, val = minimize(partial(obj, t=t), self.model.bounds)
 
         if True:
             self._debug_print("GP mean", lambda x: self.a.model.predict(x, noiseless=True)[0])
             self._debug_print("GP std", lambda x: self.a.model.predict(x, noiseless=True)[1])
-            self._debug_print("Original surface", self.a.evaluate)
-            self._debug_print("Transformed surface", trans)
+            self._debug_print("Original surface", partial(self.a.evaluate, t=t))
+            self._debug_print("Transformed surface", partial(trans, t=t))
             self._debug_print("Pending points modifier", pend)
             self._debug_print("Final surface (M={:.2f}, L={})".format(self.M,
                                                                       "".join(["{:.2f} ".format(l) for l in self.L])),
-                              obj, loc)
+                              partial(obj, t=t), loc=loc)
 
         return loc
 
