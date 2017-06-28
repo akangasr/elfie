@@ -93,7 +93,7 @@ class GPLCA(AcquisitionBase):
     def estimate_M(self, t):
         """ Estimate function maximum value """
         obj = lambda x: self.a.evaluate(x, t=t)  # minimization
-        loc, val = minimize(obj, self.model.bounds)
+        loc, val = minimize(obj, self.model.bounds, random_state=self.a.random_state)
         return -1.0 * float(val)  # maximization
 
     def estimate_L(self, t):
@@ -101,7 +101,7 @@ class GPLCA(AcquisitionBase):
         L = list()
         for i in range(len(self.model.bounds)):
             grad_obj = lambda x: -np.abs(float(self.a.evaluate_gradient(x, t=t)[0][i]))  # abs max
-            loc, val = minimize(grad_obj, self.model.bounds)
+            loc, val = minimize(grad_obj, self.model.bounds, random_state=self.a.random_state)
             L.append(abs(val))
         return L
 
@@ -129,7 +129,7 @@ class GPLCA(AcquisitionBase):
             # negation as we use a minimizer to solve a maximization problem
             return -1.0 * trans(x, t) * pend(x)
 
-        loc, val = minimize(partial(obj, t=t), self.model.bounds)
+        loc, val = minimize(partial(obj, t=t), self.model.bounds, random_state=self.a.random_state)
 
         if True:
             self._debug_print("GP mean", lambda x: self.a.model.predict(x, noiseless=True)[0])
