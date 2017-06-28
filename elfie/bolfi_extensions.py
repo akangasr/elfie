@@ -80,7 +80,7 @@ class BolfiFactory():
                                           variance=self.params.kernel_var,
                                           lengthscale=self.params.kernel_scale,
                                           ARD=self.params.ARD)
-        return GPyRegression(input_dim=input_dim,
+        return GPyRegression(parameter_names=self.model.parameter_names,
                         bounds=self.params.bounds,
                         optimizer=self.params.gp_params_optimizer,
                         max_opt_iters=self.params.gp_params_max_opt_iters,
