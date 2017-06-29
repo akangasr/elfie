@@ -169,7 +169,9 @@ def _compute(model, node_names, with_values_list, discname, obsnodename, new_dat
         r = dict()
         batch = pool.get_batch(i)
         for n in node_names:
-            r[n] = batch[n][0].tolist()  # assume numpy array
+            while len(batch[n].shape) > 1 and batch[n].shape[0] == 1:
+                batch[n] = batch[n][0]  # unwrap numpy arrays
+            r[n] = batch[n].tolist()
         logger.info("Computed values of nodes {} with values {}".format(node_names, values))
         ret.append(r)
     return ret
