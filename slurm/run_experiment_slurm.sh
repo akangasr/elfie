@@ -10,7 +10,7 @@ DATETIME=`date +%F_%T`
 JOBID="run_at_${DATETIME}"
 JOBFILE="job.py"
 NPROC=1
-SEED=12345
+PARAMS=""
 
 # process command line parameters
 # http://stackoverflow.com/questions/192249/how-do-i-parse-command-line-arguments-in-bash
@@ -39,13 +39,14 @@ case $key in
     JOBFILE="$2"
     shift
     ;;
-    -s|--seed)
-    SEED="$2"
+    -p|--params)
     shift
+    PARAMS="$@"
+    break
     ;;
     *)
     # unknown option
-    echo "usage: ./run_experiment_slurm.sh -t <max_time> -m <max_mem> -i <job_identifier> -n <number_of_processes> -j <job_file> -s <seed>"
+    echo "usage: ./run_experiment_slurm.sh -t <max_time> -m <max_mem> -i <job_identifier> -n <number_of_processes> -j <job_file> -p <parameters to be give to job file>"
     exit
     ;;
 esac
@@ -76,7 +77,7 @@ mkdir -p $DATA_DIR
 
 echo "Running experiment with"
 echo "* JOBID:     ${JOBID}"
-echo "* SEED:      ${SEED}"
+echo "* PARAMS:    ${PARAMS}"
 echo "* TIME:      ${TIME}"
 echo "* MEMORY:    ${MEM}"
 echo "* NPROC:     ${NPROC}"
@@ -99,7 +100,7 @@ cat "${FILEDIR}/slurm_job_template.sh" |
     sed "s;_ERR_FILE_;${ERR_FILE};g" |
     sed "s;_ENV_FILE_;${ENV_FILE};g" |
     sed "s;_JOBID_;${JOBID};g" |
-    sed "s;_SEED_;${SEED};g" |
+    sed "s;_PARAMS_;${PARAMS};g" |
     sed "s;_SCRIPT_DIR_;${FILEDIR};g" |
     sed "s;_NPROC_;${NPROC};g" > $SLURM_FILE
 chmod ugo+x $SLURM_FILE

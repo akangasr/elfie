@@ -12,7 +12,7 @@ env > _ENV_FILE_
 HOSTNAME=`hostname`
 echo "Starting job at ${HOSTNAME}"
 echo "* job id:     _JOBID_"
-echo "* rnd seed:   _SEED_"
+echo "* params:     _PARAMS_"
 echo "* processes:  _NPROC_"
 echo "* time limit: _TIME_"
 echo "* memory lim: _MEM_"
@@ -24,7 +24,7 @@ echo "* err file:   _ERR_FILE_"
 echo "* env file:   _ENV_FILE_"
 echo "---------------------------------------"
 source _SCRIPT_DIR_/load_libs.sh
-srun --mpi=pmi2 python3 _JOB_FILE_ _SEED_
+srun --mpi=pmi2 python3 _JOB_FILE_ _PARAMS_
 source _SCRIPT_DIR_/unload_libs.sh
 echo "---------------------------------------"
 echo "Job ended"
