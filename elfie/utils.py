@@ -59,3 +59,27 @@ def pretty(param_dict):
     ret[-1] = ")"
     return "".join(ret)
 
+def pretty_time(seconds):
+    ret = list()
+    minutes = 0
+    hours = 0
+    days = 0
+    if seconds > 60:
+        minutes = int(seconds / 60)
+        seconds = seconds - minutes * 60
+    if seconds > 0:
+        ret.append("{:.0f}s".format(seconds))
+    if minutes > 60:
+        hours = int(minutes / 60)
+        minutes = minutes - hours * 60
+    if minutes > 0:
+        ret.append("{:d}m ".format(minutes))
+    if hours > 24:
+        days = int(hours / 24)
+        hours = hours - days * 24
+    if hours > 0:
+        ret.append("{:d}h ".format(hours))
+    if days > 0:
+        ret.append("{:d}d ".format(days))
+    return "".join(reversed(ret))
+
