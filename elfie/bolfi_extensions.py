@@ -1,6 +1,7 @@
 import copy
 import traceback
 import numpy as np
+import scipy as sp
 import GPy
 
 import matplotlib
@@ -146,6 +147,34 @@ class BolfiFactory():
                 }
 
 
+def _compute(model, node_names, with_values_list, discname, obsnodename, new_data=None):
+    """ Compute values from model nodes, in parallel, using parameter values from with_values_list
+        and optionally coditioned on on the new observation data.
+    """
+    if type(with_values_list) != list:
+        logger.critical("With_values should be a list of elfi-compatible 'with_values'-dictionaries")
+        assert False
+    pool = SerializableOutputPool(node_names)
+    for i, with_values in enumerate(with_values_list):
+        pool.add_batch(with_values, batch_index=i)
+    rej = Rejection(model, discrepancy_name=discname, pool=pool, batch_size=1)
+    if new_data is not None:
+        old_data = model.computation_context.observed[self.obsnodename]
+        model.computation_context.observed[obsnodename] = new_data
+    rej.sample(len(with_values_list), quantile=1)
+    if new_data is not None:
+        model.computation_context.observed[obsnodename] = old_data
+    ret = list()
+    for i, values in enumerate(with_values_list):
+        r = dict()
+        batch = pool.get_batch(i)
+        for n in node_names:
+            r[n] = batch[n][0].tolist()  # assume numpy array
+        logger.info("Computed values of nodes {} with values {}".format(node_names, values))
+        ret.append(r)
+    return ret
+
+
 class BolfiInferenceTask():
     def __init__(self, bolfi, model, params, pool, paramnames, simuname, obsnodename, discname):
         self.bolfi = bolfi
@@ -188,37 +217,49 @@ class BolfiInferenceTask():
             idx += 1
 
     def _optimize(self):
-        calls = int(self.params.n_samples)
-
-        def target(x):
-            calls -= 1
-            wv = {p: v for p, v in zip(self.model.parameters, x)}
-            print("Evaluating at {}, {} calls left".format(wv, calls))
-            ret = self.compute_from_model(self.discname, [wv])[0]
-            print("Result: {}".format(ret))
-            return float(ret[self.discname])
+        class _Target():
+            def __init__(self, calls, model, parameters, discname, obsnodename):
+                self.calls = calls
+                self.md = model
+                self.pn = parameters
+                self.dn = discname
+                self.on = obsnodename
+            def __call__(self, x):
+                self.calls -= 1
+                wv = {p: v for p, v in zip(self.pn, x)}
+                logger.debug("Evaluating at {}, {} calls left".format(wv, self.calls))
+                ret = _compute(self.md, [self.dn], [wv], self.dn, self.on)[0]
+                logger.debug("Result: {}".format(ret))
+                return float(ret[self.dn])
 
         self.MD = dict()
         self.MD_val = None
-        while calls > 0:
-            x0 = [np.random.uniform(*b) for b in self.bolfi.model.bounds]  # TODO: randomstate?
-            print("Optimization start at {}".format(x0))
-            print("Optimization bounds {}".format(self.bolfi.model.bounds))
-            if calls > 1:
-                r = sp.optimize.minimize(fun=target,
-                                         x0=x0,
-                                         method="L-BFGS-B",
-                                         bounds=self.bolfi.model.bounds,
-                                         options={"disp": True,
-                                                  "maxfun": calls-1},
-                                         )
-                loc = r.x
-            else:
-                loc = x0
-            val = target(r.x)
+        target = _Target(int(self.params.n_samples),
+                         self.model,
+                         self.paramnames,
+                         self.discname,
+                         self.obsnodename)
+        bounds = [self.params.bounds[p] for p in self.paramnames]
+        logger.debug("Starting optimization with bounds {}, total {} function calls".format(bounds, target.calls))
+        while target.calls > 0:
+            x0 = [np.random.uniform(*b) for b in bounds]  # TODO: randomstate?
+            logger.debug("Optimization started from {}, {} function calls left".format(x0, target.calls))
+            r = sp.optimize.minimize(fun=target,
+                                     x0=x0,
+                                     method="L-BFGS-B",
+                                     bounds=bounds,
+                                     options={"disp": True,
+                                              "maxfun": int(target.calls)},
+                                     )
+            loc = r[0]
+            val = float(r[1])
+            logger.debug("Optimum at {} (value {}), {} function calls remaining".format(loc, val, target.calls))
             if self.MD_val is None or self.MD_val > val:
-                self.MD = {p: v for p, v in zip(self.model.parameters, r.x)}
+                self.MD = {p: v for p, v in zip(self.paramnames, loc)}
                 self.MD_val = val
+
+    def compute_from_model(self, node_names, with_values_list, new_data=None):
+        return _compute(self.model, node_names, with_values_list, self.discname, self.obsnodename, new_data=None)
 
     def compute_posterior(self):
         """ Constructs posterior """
@@ -248,33 +289,6 @@ class BolfiInferenceTask():
 
     def simulate_data(self, with_values):
         return self.model.generate(with_values=with_values)[self.simuname]
-
-    def compute_from_model(self, node_names, with_values_list, new_data=None):
-        """ Compute values from model nodes, in parallel, using parameter values from with_values_list
-            and optionally coditioned on on the new observation data.
-        """
-        if type(with_values_list) != list:
-            logger.critical("With_values should be a list of elfi-compatible 'with_values'-dictionaries")
-            assert False
-        pool = SerializableOutputPool(node_names)
-        for i, with_values in enumerate(with_values_list):
-            pool.add_batch(with_values, batch_index=i)
-        rej = Rejection(self.model, discrepancy_name=self.model[self.discname], pool=pool, batch_size=1)
-        if new_data is not None:
-            old_data = self.model.computation_context.observed[self.obsnodename]
-            self.model.computation_context.observed[self.obsnodename] = new_data
-        rej.sample(len(with_values_list), quantile=1)
-        if new_data is not None:
-            self.model.computation_context.observed[self.obsnodename] = old_data
-        ret = list()
-        for i, values in enumerate(with_values_list):
-            r = dict()
-            batch = pool.get_batch(i)
-            for n in node_names:
-                r[n] = batch[n][0]  # assume length 1
-            logger.info("Computed values of nodes {} with values {}".format(node_names, values))
-            ret.append(r)
-        return ret
 
 
     def plot_post(self, pdf, figsize):

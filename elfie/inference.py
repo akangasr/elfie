@@ -107,12 +107,12 @@ class PointEstimateSimulationPhase(InferencePhase):
         if "MAP" in ret.keys():
             ret["MD_sim"], ret["ML_sim"], ret["MAP_sim"] = inference_task.compute_from_model([inference_task.obsnodename],
                                                                                          [ret["MD"], ret["ML"], ret["MAP"]])
-            ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename].tolist()
-            ret["ML_sim"] = ret["ML_sim"][inference_task.obsnodename].tolist()
-            ret["MAP_sim"] = ret["MAP_sim"][inference_task.obsnodename].tolist()
+            ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename]
+            ret["ML_sim"] = ret["ML_sim"][inference_task.obsnodename]
+            ret["MAP_sim"] = ret["MAP_sim"][inference_task.obsnodename]
         else:
             ret["MD_sim"] = inference_task.compute_from_model([inference_task.obsnodename], [ret["MD"],])
-            ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename].tolist()
+            ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename]
 
         return ret
 
@@ -130,17 +130,23 @@ class PlottingPhase(InferencePhase):
 
     def _run(self, inference_task, ret):
         if self.pdf is not None:
+            logger.info("Plotting posterior")
             inference_task.plot_post(self.pdf, self.figsize)
             if self.plot_data is not None:
                 if "MD_sim" in ret.keys():
+                    logger.info("Plotting MD sample")
                     self.plot_data(self.pdf, self.figsize, ret["MD_sim"], "Minimum discrepancy sample at {} (discrepancy {:.2f})".format(pretty(ret["MD"]), ret["MD_val"]))
                 if "ML_sim" in ret.keys():
+                    logger.info("Plotting ML sample")
                     self.plot_data(self.pdf, self.figsize, ret["ML_sim"], "ML sample at {} (discrepancy {})".format(pretty(ret["ML"]), "TODO"))
                 if "MAP_sim" in ret.keys():
+                    logger.info("Plotting MAP sample")
                     self.plot_data(self.pdf, self.figsize, ret["MAP_sim"], "MAP sample at {} (discrepancy {})".format(pretty(ret["MAP"]), "TODO"))
                 if self.obs_data is not None:
+                    logger.info("Plotting observation data")
                     self.plot_data(self.pdf, self.figsize, self.obs_data, "Observation data")
                 if self.test_data is not None:
+                    logger.info("Plotting test data")
                     self.plot_data(self.pdf, self.figsize, self.test_data, "Test data")
         else:
             logger.info("Pass, no pdf file.")
