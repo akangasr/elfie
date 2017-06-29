@@ -182,14 +182,14 @@ class PredictionErrorPhase(InferencePhase):
                 ret["MD_err"], ret["ML_err"], ret["MAP_err"] = inference_task.compute_from_model([inference_task.discname],
                                                                                                  [ret["MD"], ret["ML"], ret["MAP"]],
                                                                                                  new_data=self.test_data)
-                ret["MD_err"] = float(ret["MD_err"][inference_task.discname])
-                ret["ML_err"] = float(ret["ML_err"][inference_task.discname])
-                ret["MAP_err"] = float(ret["MAP_err"][inference_task.discname])
+                ret["MD_err"] = float(ret["MD_err"][inference_task.discname][0])
+                ret["ML_err"] = float(ret["ML_err"][inference_task.discname][0])
+                ret["MAP_err"] = float(ret["MAP_err"][inference_task.discname][0])
             else:
                 ret["MD_err"] = inference_task.compute_from_model([inference_task.discname],
                                                                   [ret["MD"],],
                                                                   new_data=self.test_data)
-                ret["MD_err"] = float(ret["MD_err"][inference_task.discname])
+                ret["MD_err"] = float(ret["MD_err"][inference_task.discname][0])
         else:
             logger.info("Pass, no test data.")
         return ret
