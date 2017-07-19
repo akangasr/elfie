@@ -16,13 +16,14 @@ def inference_experiment(inference_factory,
                          pdf=None,
                          figsize=(8.27, 11.69),
                          skip_post=False,
-                         plot_data=None):
+                         plot_data=None,
+                         n_cores=1):
 
         inference_task = inference_factory.get()
         ret = dict()
 
         phases = [
-            SamplingPhase(),
+            SamplingPhase(n_cores=n_cores),
             PosteriorAnalysisPhase(skip=skip_post),
             PointEstimateSimulationPhase(),
             PlottingPhase(pdf=pdf, figsize=figsize, obs_data=obs_data, test_data=test_data, plot_data=plot_data),
@@ -60,13 +61,15 @@ class InferencePhase():
 
 class SamplingPhase(InferencePhase):
 
-    def __init__(self, name="Sampling", requirements=[]):
+    def __init__(self, name="Sampling", requirements=[], n_cores=1):
         InferencePhase.__init__(self, name, requirements)
+        self.n_cores = n_cores
 
     def _run(self, inference_task, ret):
         sampling_start = time.time()
         inference_task.do_sampling()
         sampling_end = time.time()
+        ret["n_cores"] = self.n_cores
         ret["sampling_duration"] = sampling_end - sampling_start
         if inference_task.pool is not None:
             ret["sample_pool"] = inference_task.pool.to_dict()

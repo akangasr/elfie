@@ -44,9 +44,9 @@ class ExperimentGroup():
             print("* {} samples".format(s))
             for m in sorted(self.methods.keys()):
                 try:
-                    mean = self.get_filt_agg(lambda e: getter(e), lambda e: e.method==m and e.samples==s, np.mean)
-                    std = self.get_filt_agg(lambda e: getter(e), lambda e: e.method==m and e.samples==s, np.std)
-                    n = self.get_filt_agg(lambda e: getter(e), lambda e: e.method==m and e.samples==s, len)
+                    mean = self.get_filt_agg(getter, lambda e: e.method==m and e.samples==s, np.mean)
+                    std = self.get_filt_agg(getter, lambda e: e.method==m and e.samples==s, np.std)
+                    n = self.get_filt_agg(getter, lambda e: e.method==m and e.samples==s, len)
                     if formatter is None:
                         print("  - {}: mean={:.2f}, std={:.2f} (N={})".format(m, mean, std, n))
                     else:
@@ -55,28 +55,51 @@ class ExperimentGroup():
                     print("  - {}: skip".format(m))
         print("")
 
-    def plot_value_mean_std(self, name, getter, colors={"bo": "blue", "grid": "red", "uniform": "green"}, alpha=0.25):
+    def plot_value_mean_std(self, name, getters, colors=None, alpha=0.25):
+        if colors is None:
+            colors = {
+                    "BO": "skyblue",
+                    "ABC ML": "dodgerblue",
+                    "ABC MAP": "blue",
+                    "ABC": "blue",
+                    "GRID": "green",
+                    "LBFGSB": "orangered",
+                    "NELDERMEAD": "m"}
+        if type(getters) is not dict:
+            getters = {"": getters}
+        drawn = False
         for m in sorted(self.methods.keys()):
-            means = list()
-            stds = list()
-            samples = list()
-            for s in sorted(self.samples.keys()):
-                try:
-                    mean = self.get_filt_agg(lambda e: getter(e), lambda e: e.method==m and e.samples==s, np.mean)
-                    std = self.get_filt_agg(lambda e: getter(e), lambda e: e.method==m and e.samples==s, np.std)
-                    means.append(mean)
-                    stds.append(std)
-                    samples.append(s)
-                except Exception:
-                    pass
-            if len(means) > 0:
-                means = np.array(means)
-                stds = np.array(stds)
-                pl.plot(samples, means, color=colors[m], label=m)
-                pl.fill_between(samples, means+stds, means-stds, facecolor=colors[m], alpha=alpha)
-        pl.title("{} (mean and std)".format(name))
-        pl.legend(loc=1)
-        pl.xlabel("Samples")
-        pl.show()
+            for n, getter in getters.items():
+                means = list()
+                stds = list()
+                samples = list()
+                label = "{} {}".format(m, n).upper().strip()
+                if label == "BO ML":
+                    label = "ABC ML"
+                if label == "BO MAP":
+                    label = "ABC MAP"
+                if label == "BO ABC":
+                    label = "ABC"
+                for s in sorted(self.samples.keys()):
+                    try:
+                        mean = self.get_filt_agg(getter, lambda e: e.method==m and e.samples==s, np.mean)
+                        std = self.get_filt_agg(getter, lambda e: e.method==m and e.samples==s, np.std)
+                        means.append(mean)
+                        stds.append(std)
+                        samples.append(s)
+                    except Exception as e:
+                        print("skip {} ({})".format(label, e))
+                        pass
+                if len(means) > 0:
+                    drawn = True
+                    means = np.array(means)
+                    stds = np.array(stds)
+                    pl.plot(samples, means, marker=".", color=colors[label], label=label)
+                    pl.fill_between(samples, means+stds, means-stds, facecolor=colors[label], alpha=alpha)
+        if drawn is True:
+            pl.title("{} (mean and std)".format(name))
+            pl.legend(loc=1)
+            pl.xlabel("Samples")
+            pl.show()
 
 

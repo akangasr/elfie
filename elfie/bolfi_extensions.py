@@ -200,6 +200,7 @@ class BolfiInferenceTask():
         """ Computes BO samples """
         if self.opt is not None:
             self._optimize()
+            return
         self.bolfi.infer(self.params.n_samples)
         self.samples = dict()
         self.MD = dict()
@@ -267,8 +268,8 @@ class BolfiInferenceTask():
                                          method=method,
                                          bounds=bounds,
                                          options=options)
-                loc = r[0]
-                val = float(r[1])
+                loc = r.x
+                val = float(r.fun)
                 logger.info("Optimum at {} (value {}), {} function calls remaining".format(loc, val, target.calls))
             except ValueError as e:
                 logger.info(e)
