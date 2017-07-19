@@ -25,7 +25,7 @@ class BolfiParams():
     """ Encapsulates BOLFI parameters
     """
     def __init__(self,
-            bounds=((0,1),),
+            bounds=dict(),
             n_samples=0,
             n_initial_evidence=0,
             sampling_type="BO",
@@ -105,7 +105,7 @@ class BolfiFactory():
     def get(self):
         """ Returns new BolfiExperiment object
         """
-        if self.params.sampling_type == "optimize":
+        if self.params.sampling_type in ["lbfgsb", "neldermead"]:
             return BolfiInferenceTask(None,
                                       self.model,
                                       copy.copy(self.params),
@@ -113,7 +113,8 @@ class BolfiFactory():
                                       self.model.parameter_names,
                                       self.params.simulator_node_name,
                                       self.params.observed_node_name,
-                                      self.params.discrepancy_node_name)
+                                      self.params.discrepancy_node_name,
+                                      self.params.sampling_type)
         gp = self._gp()
         acquisition = self._acquisition(gp)
         if self.params.pool is None:
@@ -178,7 +179,7 @@ def _compute(model, node_names, with_values_list, discname, obsnodename, new_dat
 
 
 class BolfiInferenceTask():
-    def __init__(self, bolfi, model, params, pool, paramnames, simuname, obsnodename, discname):
+    def __init__(self, bolfi, model, params, pool, paramnames, simuname, obsnodename, discname, opt=None):
         self.bolfi = bolfi
         self.model = model
         self.params = params
@@ -193,10 +194,11 @@ class BolfiInferenceTask():
         self.simuname = simuname
         self.obsnodename = obsnodename
         self.discname = discname
+        self.opt = opt
 
     def do_sampling(self):
         """ Computes BO samples """
-        if self.bolfi is None:
+        if self.opt is not None:
             self._optimize()
         self.bolfi.infer(self.params.n_samples)
         self.samples = dict()
@@ -222,17 +224,22 @@ class BolfiInferenceTask():
         class _Target():
             def __init__(self, calls, model, parameters, discname, obsnodename):
                 self.calls = calls
+                self.samples = list()
                 self.md = model
                 self.pn = parameters
                 self.dn = discname
                 self.on = obsnodename
             def __call__(self, x):
+                if self.calls < 1:
+                    raise ValueError("No calls left")
                 self.calls -= 1
                 wv = {p: v for p, v in zip(self.pn, x)}
-                logger.debug("Evaluating at {}, {} calls left".format(wv, self.calls))
-                ret = _compute(self.md, [self.dn], [wv], self.dn, self.on)[0]
-                logger.debug("Result: {}".format(ret))
-                return float(ret[self.dn])
+                logger.info("Evaluating at {}, {} calls left".format(wv, self.calls))
+                ret = _compute(self.md, [self.dn], [wv], self.dn, self.on)
+                logger.info("Result: {}".format(ret))
+                ret = float(ret[0][self.dn][0])
+                self.samples.append((wv, ret))
+                return ret
 
         self.MD = dict()
         self.MD_val = None
@@ -242,23 +249,34 @@ class BolfiInferenceTask():
                          self.discname,
                          self.obsnodename)
         bounds = [self.params.bounds[p] for p in self.paramnames]
-        logger.debug("Starting optimization with bounds {}, total {} function calls".format(bounds, target.calls))
+        logger.info("Starting optimization with bounds {}, total {} function calls".format(bounds, target.calls))
         while target.calls > 0:
+            if self.opt == "lbfgsb":
+                method = "L-BFGS-B"
+                options = {"disp": True,
+                           "maxfun": int(target.calls)}
+            if self.opt == "neldermead":
+                method = "Nelder-Mead"
+                options = {"disp": True,
+                           "maxfev": int(target.calls)}
             x0 = [np.random.uniform(*b) for b in bounds]  # TODO: randomstate?
-            logger.debug("Optimization started from {}, {} function calls left".format(x0, target.calls))
-            r = sp.optimize.minimize(fun=target,
-                                     x0=x0,
-                                     method="L-BFGS-B",
-                                     bounds=bounds,
-                                     options={"disp": True,
-                                              "maxfun": int(target.calls)},
-                                     )
-            loc = r[0]
-            val = float(r[1])
-            logger.debug("Optimum at {} (value {}), {} function calls remaining".format(loc, val, target.calls))
+            logger.info("Optimization ({}) started from {}, {} function calls left".format(method, x0, target.calls))
+            try:
+                r = sp.optimize.minimize(fun=target,
+                                         x0=x0,
+                                         method=method,
+                                         bounds=bounds,
+                                         options=options)
+                loc = r[0]
+                val = float(r[1])
+                logger.info("Optimum at {} (value {}), {} function calls remaining".format(loc, val, target.calls))
+            except ValueError as e:
+                logger.info(e)
+        for loc, val in target.samples:
             if self.MD_val is None or self.MD_val > val:
-                self.MD = {p: v for p, v in zip(self.paramnames, loc)}
+                self.MD = loc
                 self.MD_val = val
+        logger.info("MD sample at {}, value {}".format(self.MD, self.MD_val))
 
     def compute_from_model(self, node_names, with_values_list, new_data=None):
         return _compute(self.model, node_names, with_values_list, self.discname, self.obsnodename, new_data=None)

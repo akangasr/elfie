@@ -68,7 +68,8 @@ class SamplingPhase(InferencePhase):
         inference_task.do_sampling()
         sampling_end = time.time()
         ret["sampling_duration"] = sampling_end - sampling_start
-        ret["sample_pool"] = inference_task.pool.to_dict()
+        if inference_task.pool is not None:
+            ret["sample_pool"] = inference_task.pool.to_dict()
         ret["MD"] = inference_task.MD
         ret["MD_val"] = inference_task.MD_val
         return ret
@@ -76,7 +77,7 @@ class SamplingPhase(InferencePhase):
 
 class PosteriorAnalysisPhase(InferencePhase):
 
-    def __init__(self, name="Posterior analysis", requirements=["sample_pool"], skip=False):
+    def __init__(self, name="Posterior analysis", requirements=["MD"], skip=False):
         self.skip = skip
         InferencePhase.__init__(self, name, requirements)
 
@@ -100,26 +101,43 @@ class PosteriorAnalysisPhase(InferencePhase):
 
 class PointEstimateSimulationPhase(InferencePhase):
 
-    def __init__(self, name="Point estimate simulation", requirements=["MD"]):
+    def __init__(self, name="Point estimate simulation", requirements=["MD"], replicates=10, region_size=0.02):
         InferencePhase.__init__(self, name, requirements)
+        self.replicates = replicates
+        self.region_size = region_size
+
+    def _simulate_around(self, inference_task, loc):
+        nodes = [inference_task.obsnodename, inference_task.discname]
+        bounds = inference_task.params.bounds
+        wv_dicts = list()
+        logger.info("Simulating near: {}".format(loc))
+        for i in range(self.replicates):
+            wv = dict()
+            for k, v in loc.items():
+                bound_width = bounds[k][1] - bounds[k][0]
+                region_width = bound_width * self.region_size
+                low = max(bounds[k][0], v - (region_width/2.0))
+                high = min(bounds[k][1], v + (region_width/2.0))
+                val = float(np.random.uniform(low, high))
+                wv[k] = val
+            wv_dicts.append(wv)
+        logger.info("Simulating at: {}".format(wv_dicts))
+        sims = inference_task.compute_from_model(nodes, wv_dicts)
+        for i in range(len(sims)):
+            sims[i]["_at"] = wv_dicts[i]
+        return sims
 
     def _run(self, inference_task, ret):
+        ret["MD_sim"] = self._simulate_around(inference_task, ret["MD"])
         if "MAP" in ret.keys():
-            ret["MD_sim"], ret["ML_sim"], ret["MAP_sim"] = inference_task.compute_from_model([inference_task.obsnodename],
-                                                                                         [ret["MD"], ret["ML"], ret["MAP"]])
-            ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename]
-            ret["ML_sim"] = ret["ML_sim"][inference_task.obsnodename]
-            ret["MAP_sim"] = ret["MAP_sim"][inference_task.obsnodename]
-        else:
-            ret["MD_sim"] = inference_task.compute_from_model([inference_task.obsnodename], [ret["MD"],])[0]
-            ret["MD_sim"] = ret["MD_sim"][inference_task.obsnodename]
-
+            ret["ML_sim"] = self._simulate_around(inference_task, ret["ML"])
+            ret["MAP_sim"] = self._simulate_around(inference_task, ret["MAP"])
         return ret
 
 
 class PlottingPhase(InferencePhase):
 
-    def __init__(self, name="Plotting", requirements=["sample_pool"], pdf=None, figsize=(8.27, 11.69),
+    def __init__(self, name="Plotting", requirements=["MD"], pdf=None, figsize=(8.27, 11.69),
                  obs_data=None, test_data=None, plot_data=None):
         InferencePhase.__init__(self, name, requirements)
         self.pdf = pdf
@@ -128,20 +146,27 @@ class PlottingPhase(InferencePhase):
         self.test_data = test_data
         self.plot_data = plot_data
 
+    def _plot_datas(self, inference_task, sims, name):
+        logger.info("Plotting {} samples".format(name))
+        for sim in sims:
+            try:
+                string = "{} sample at {} (discrepancy {:.2f})".format(name, pretty(sim["_at"]), sim[inference_task.discname][0])
+            except:
+                string = "asd"
+                print(name, sim)
+            self.plot_data(self.pdf, self.figsize, sim[inference_task.obsnodename], string)
+
     def _run(self, inference_task, ret):
         if self.pdf is not None:
             logger.info("Plotting posterior")
             inference_task.plot_post(self.pdf, self.figsize)
             if self.plot_data is not None:
                 if "MD_sim" in ret.keys():
-                    logger.info("Plotting MD sample")
-                    self.plot_data(self.pdf, self.figsize, ret["MD_sim"], "Minimum discrepancy sample at {} (discrepancy {:.2f})".format(pretty(ret["MD"]), ret["MD_val"]))
+                    self._plot_datas(inference_task, ret["MD_sim"], "Minimum discrepancy")
                 if "ML_sim" in ret.keys():
-                    logger.info("Plotting ML sample")
-                    self.plot_data(self.pdf, self.figsize, ret["ML_sim"], "ML sample at {} (discrepancy {})".format(pretty(ret["ML"]), "TODO"))
+                    self._plot_datas(inference_task, ret["ML_sim"], "ML")
                 if "MAP_sim" in ret.keys():
-                    logger.info("Plotting MAP sample")
-                    self.plot_data(self.pdf, self.figsize, ret["MAP_sim"], "MAP sample at {} (discrepancy {})".format(pretty(ret["MAP"]), "TODO"))
+                    self._plot_datas(inference_task, ret["MAP_sim"], "MAP")
                 if self.obs_data is not None:
                     logger.info("Plotting observation data")
                     self.plot_data(self.pdf, self.figsize, self.obs_data, "Observation data")
@@ -176,20 +201,17 @@ class PredictionErrorPhase(InferencePhase):
         InferencePhase.__init__(self, name, requirements)
         self.test_data = test_data
 
+    def _compute_errors(self, inference_task, sims):
+        wv_dicts = [{inference_task.obsnodename: sim[inference_task.obsnodename]} for sim in sims]
+        disc = inference_task.compute_from_model([inference_task.discname], wv_dicts, new_data=self.test_data)
+        return [float(d[inference_task.discname][0]) for d in disc]
+
     def _run(self, inference_task, ret):
         if self.test_data is not None:
+            ret["MD_errs"] = self._compute_errors(inference_task, ret["MD_sim"])
             if "MAP" in ret.keys():
-                ret["MD_err"], ret["ML_err"], ret["MAP_err"] = inference_task.compute_from_model([inference_task.discname],
-                                                                                                 [ret["MD"], ret["ML"], ret["MAP"]],
-                                                                                                 new_data=self.test_data)
-                ret["MD_err"] = float(ret["MD_err"][inference_task.discname][0])
-                ret["ML_err"] = float(ret["ML_err"][inference_task.discname][0])
-                ret["MAP_err"] = float(ret["MAP_err"][inference_task.discname][0])
-            else:
-                ret["MD_err"] = inference_task.compute_from_model([inference_task.discname],
-                                                                  [ret["MD"],],
-                                                                  new_data=self.test_data)[0]
-                ret["MD_err"] = float(ret["MD_err"][inference_task.discname][0])
+                ret["ML_errs"] = self._compute_errors(inference_task, ret["ML_sim"])
+                ret["MAP_errs"] = self._compute_errors(inference_task, ret["MAP_sim"])
         else:
             logger.info("Pass, no test data.")
         return ret
