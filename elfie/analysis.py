@@ -55,4 +55,28 @@ class ExperimentGroup():
                     print("  - {}: skip".format(m))
         print("")
 
+    def plot_value_mean_std(self, name, getter, colors={"bo": "blue", "grid": "red", "uniform": "green"}, alpha=0.25):
+        for m in sorted(self.methods.keys()):
+            means = list()
+            stds = list()
+            samples = list()
+            for s in sorted(self.samples.keys()):
+                try:
+                    mean = self.get_filt_agg(lambda e: getter(e), lambda e: e.method==m and e.samples==s, np.mean)
+                    std = self.get_filt_agg(lambda e: getter(e), lambda e: e.method==m and e.samples==s, np.std)
+                    means.append(mean)
+                    stds.append(std)
+                    samples.append(s)
+                except Exception:
+                    pass
+            if len(means) > 0:
+                means = np.array(means)
+                stds = np.array(stds)
+                pl.plot(samples, means, color=colors[m], label=m)
+                pl.fill_between(samples, means+stds, means-stds, facecolor=colors[m], alpha=alpha)
+        pl.title("{} (mean and std)".format(name))
+        pl.legend(loc=1)
+        pl.xlabel("Samples")
+        pl.show()
+
 
