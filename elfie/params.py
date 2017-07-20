@@ -42,6 +42,17 @@ class ModelParams():
     def get_lengthscales(self):
         return [p["kernel_scale"] for p in self.parameters if p["distr"] is not "constant"]
 
-    def get_grid_tics(self):
-        return [np.linspace(p["minv"], p["maxv"], p["ntics"]).tolist() for p in self.parameters if p["distr"] is not "constant"]
+    def get_grid_tics(self, seed):
+        ret = list()
+        rs = np.random.RandomState(seed)
+        for p in self.parameters:
+            if p["distr"] is not "constant":
+                delta = (p["maxv"] - p["minv"])/float(p["ntics"])
+                d = rs.uniform(0.0, delta)
+                minv = p["minv"] + d
+                maxv = p["maxv"] - d
+                tics = np.linspace(minv, maxv, p["ntics"]).tolist()
+                ret.append(tics)
+        print("TICS", ret)
+        return ret
 
