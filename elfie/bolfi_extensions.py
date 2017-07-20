@@ -155,9 +155,14 @@ def _compute(model, node_names, with_values_list, discname, obsnodename, new_dat
     if type(with_values_list) != list:
         logger.critical("With_values should be a list of elfi-compatible 'with_values'-dictionaries")
         assert False
-    pool = SerializableOutputPool(node_names)
+    pool_nodes = node_names
+    for k in with_values_list[0].keys():
+        if k not in pool_nodes:
+            pool_nodes.append(k)
+    pool = SerializableOutputPool(pool_nodes)
     for i, with_values in enumerate(with_values_list):
-        pool.add_batch(with_values, batch_index=i)
+        wv = {k: np.atleast_2d(v) for k, v in with_values.items()}
+        pool.add_batch(wv, batch_index=i)
     rej = Rejection(model, discrepancy_name=discname, pool=pool, batch_size=1)
     if new_data is not None:
         old_data = model.computation_context.observed[self.obsnodename]
