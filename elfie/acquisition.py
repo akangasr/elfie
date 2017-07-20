@@ -93,7 +93,7 @@ class GPLCA(AcquisitionBase):
     def estimate_M(self, t):
         """ Estimate function maximum value """
         obj = lambda x: self.a.evaluate(x, t=t)  # minimization
-        loc, val = minimize(obj, self.model.bounds, random_state=self.a.random_state)
+        loc, val = minimize(obj, self.model.bounds, random_state=self.a.random_state, maxiter=200)
         return -1.0 * float(val)  # maximization
 
     def estimate_L(self, t):
@@ -101,15 +101,16 @@ class GPLCA(AcquisitionBase):
         L = list()
         for i in range(len(self.model.bounds)):
             grad_obj = lambda x: -np.abs(float(self.a.evaluate_gradient(x, t=t)[0][i]))  # abs max
-            loc, val = minimize(grad_obj, self.model.bounds, random_state=self.a.random_state)
+            loc, val = minimize(grad_obj, self.model.bounds, random_state=self.a.random_state, maxiter=200)
             L.append(abs(val))
         return L
 
     def _acq(self, pending_locations, t):
+        logger.info("Acquiring sample location..")
         phis = []
         if pending_locations is not None:
             for pl in pending_locations:
-                print("Pending: {}".format(pl))
+                #print("Pending: {}".format(pl))
                 mean, var = self.model.predict(pl, noiseless=True)
                 mean = -1.0 * float(mean)  # maximization
                 var = float(var)
@@ -129,24 +130,25 @@ class GPLCA(AcquisitionBase):
             # negation as we use a minimizer to solve a maximization problem
             return -1.0 * trans(x, t) * pend(x)
 
-        loc, val = minimize(partial(obj, t=t), self.model.bounds, random_state=self.a.random_state)
+        loc, val = minimize(partial(obj, t=t), self.model.bounds, random_state=self.a.random_state, maxiter=200)
 
         if True:
-            self._debug_print("GP mean", lambda x: self.a.model.predict(x, noiseless=True)[0])
-            self._debug_print("GP std", lambda x: self.a.model.predict(x, noiseless=True)[1])
-            self._debug_print("Original surface", partial(self.a.evaluate, t=t))
-            self._debug_print("Transformed surface", partial(trans, t=t))
-            self._debug_print("Pending points modifier", pend)
+            #self._debug_print("GP mean", lambda x: self.a.model.predict(x, noiseless=True)[0])
+            #self._debug_print("GP std", lambda x: self.a.model.predict(x, noiseless=True)[1])
+            #self._debug_print("Original surface", partial(self.a.evaluate, t=t))
+            #self._debug_print("Transformed surface", partial(trans, t=t))
+            #self._debug_print("Pending points modifier", pend)
             self._debug_print("Final surface (M={:.2f}, L={})".format(self.M,
                                                                       "".join(["{:.2f} ".format(l) for l in self.L])),
                               partial(obj, t=t), loc=loc)
 
+        logger.info("Acquired {}".format(loc))
         return loc
 
 
     def _debug_print(self, name, obj, loc=None):
         """debug printout"""
-        tics = 20
+        tics = 10
         maxv = float("-inf")
         minv = float("inf")
         mind = float("inf")
@@ -168,7 +170,7 @@ class GPLCA(AcquisitionBase):
                         minl = l
                         mind = d
 
-        print("{} :".format(name))
+        print(name)
         for y in reversed(range(tics)):
             line = ["|"]
             for x in range(tics):
@@ -195,6 +197,4 @@ class GPLCA(AcquisitionBase):
                     line.append("  ")
             line.append("|")
             print("".join(line))
-        if loc is not None:
-            print("Acquired {}".format(loc))
 

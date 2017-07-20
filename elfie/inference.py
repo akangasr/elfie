@@ -131,9 +131,12 @@ class PointEstimateSimulationPhase(InferencePhase):
         return sims
 
     def _run(self, inference_task, ret):
+        logger.info("Simulating near MD")
         ret["MD_sim"] = self._simulate_around(inference_task, ret["MD"])
         if "MAP" in ret.keys():
+            logger.info("Simulating near ML")
             ret["ML_sim"] = self._simulate_around(inference_task, ret["ML"])
+            logger.info("Simulating near MAP")
             ret["MAP_sim"] = self._simulate_around(inference_task, ret["MAP"])
         return ret
 
@@ -211,9 +214,12 @@ class PredictionErrorPhase(InferencePhase):
 
     def _run(self, inference_task, ret):
         if self.test_data is not None:
+            logger.info("Estimating MD prediction error")
             ret["MD_errs"] = self._compute_errors(inference_task, ret["MD_sim"])
             if "MAP" in ret.keys():
+                logger.info("Estimating ML prediction error")
                 ret["ML_errs"] = self._compute_errors(inference_task, ret["ML_sim"])
+                logger.info("Estimating MAP prediction error")
                 ret["MAP_errs"] = self._compute_errors(inference_task, ret["MAP_sim"])
         else:
             logger.info("Pass, no test data.")

@@ -174,6 +174,7 @@ def _compute(model, node_names, with_values_list, discname, obsnodename, new_dat
                 batch[n] = batch[n][0]  # unwrap numpy arrays
             r[n] = batch[n].tolist()
         logger.info("Computed values of nodes {} with values {}".format(node_names, values))
+        logger.info("Result was {}".format(r))
         ret.append(r)
     return ret
 
