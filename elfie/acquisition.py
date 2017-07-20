@@ -73,6 +73,7 @@ class GPLCA(AcquisitionBase):
         super(GPLCA, self).__init__(model=self.a.model)
 
     def acquire(self, n_values, pending_locations=None, t=None):
+        logger.info("Acquiring sample location..")
         ret = np.zeros((n_values, len(self.model.bounds)))
         if pending_locations is None:
             pl = None
@@ -81,6 +82,7 @@ class GPLCA(AcquisitionBase):
         self.L = self.estimate_L(t)
         self.M = self.estimate_M(t)
         for i in range(n_values):
+            logger.info("Finding acquisition minimum..")
             r = self._acq(pl, t)
             ret[i] = r
             r2 = np.atleast_2d(r)
@@ -88,25 +90,27 @@ class GPLCA(AcquisitionBase):
                 pl = r2
             else:
                 pl = np.vstack((pl, r2))
+        logger.info("Acquired {}".format(ret))
         return ret
 
     def estimate_M(self, t):
         """ Estimate function maximum value """
+        logger.info("Estimating M..")
         obj = lambda x: self.a.evaluate(x, t=t)  # minimization
-        loc, val = minimize(obj, self.model.bounds, random_state=self.a.random_state, maxiter=200)
+        loc, val = minimize(obj, self.model.bounds, random_state=self.a.random_state, maxiter=300, n_start_points=3)
         return -1.0 * float(val)  # maximization
 
     def estimate_L(self, t):
         """ Return a list of acq surface gradient absolute value max for each dimension """
         L = list()
         for i in range(len(self.model.bounds)):
+            logger.info("Estimating L {}..".format(i))
             grad_obj = lambda x: -np.abs(float(self.a.evaluate_gradient(x, t=t)[0][i]))  # abs max
-            loc, val = minimize(grad_obj, self.model.bounds, random_state=self.a.random_state, maxiter=200)
+            loc, val = minimize(grad_obj, self.model.bounds, random_state=self.a.random_state, maxiter=100, n_start_points=1)  # expensive to evaluate
             L.append(abs(val))
         return L
 
     def _acq(self, pending_locations, t):
-        logger.info("Acquiring sample location..")
         phis = []
         if pending_locations is not None:
             for pl in pending_locations:
@@ -130,7 +134,7 @@ class GPLCA(AcquisitionBase):
             # negation as we use a minimizer to solve a maximization problem
             return -1.0 * trans(x, t) * pend(x)
 
-        loc, val = minimize(partial(obj, t=t), self.model.bounds, random_state=self.a.random_state, maxiter=200)
+        loc, val = minimize(partial(obj, t=t), self.model.bounds, random_state=self.a.random_state, maxiter=500)
 
         if True:
             #self._debug_print("GP mean", lambda x: self.a.model.predict(x, noiseless=True)[0])
@@ -142,7 +146,6 @@ class GPLCA(AcquisitionBase):
                                                                       "".join(["{:.2f} ".format(l) for l in self.L])),
                               partial(obj, t=t), loc=loc)
 
-        logger.info("Acquired {}".format(loc))
         return loc
 
 
