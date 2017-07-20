@@ -17,7 +17,9 @@ def inference_experiment(inference_factory,
                          figsize=(8.27, 11.69),
                          skip_post=False,
                          plot_data=None,
-                         n_cores=1):
+                         n_cores=1,
+                         replicates=10,
+                         region_size=0.05):
 
         inference_task = inference_factory.get()
         ret = dict()
@@ -25,7 +27,7 @@ def inference_experiment(inference_factory,
         phases = [
             SamplingPhase(n_cores=n_cores),
             PosteriorAnalysisPhase(skip=skip_post),
-            PointEstimateSimulationPhase(),
+            PointEstimateSimulationPhase(replicates=replicates, region_size=region_size),
             PlottingPhase(pdf=pdf, figsize=figsize, obs_data=obs_data, test_data=test_data, plot_data=plot_data),
             GroundTruthErrorPhase(ground_truth=ground_truth),
             PredictionErrorPhase(test_data=test_data),
@@ -104,7 +106,7 @@ class PosteriorAnalysisPhase(InferencePhase):
 
 class PointEstimateSimulationPhase(InferencePhase):
 
-    def __init__(self, name="Point estimate simulation", requirements=["MD"], replicates=10, region_size=0.02):
+    def __init__(self, name="Point estimate simulation", requirements=["MD"], replicates=10, region_size=0.05):
         InferencePhase.__init__(self, name, requirements)
         self.replicates = replicates
         self.region_size = region_size
