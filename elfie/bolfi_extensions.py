@@ -363,6 +363,7 @@ class BolfiInferenceTask():
             bounds.append(self.params.bounds[k])
             names.append(k)
 
+        ret = dict()
         for fname, fun in [("GP mean", lambda x: self.post.model.predict(x)[0][:,0]),
                            ("GP std", lambda x: self.post.model.predict(x)[1][:,0]),
                            ("Prior density", self.post.prior.pdf),
@@ -397,6 +398,7 @@ class BolfiInferenceTask():
                                         bounds[0][1],
                                         bounds[1][1],
                                         100, 100, fun)
+                    ret[fname] = {"X": vals[0].tolist(), "Y": vals[1].tolist(), "Z": vals[2].tolist()}
                     CS = ax.contourf(vals[0], vals[1], vals[2] / max(np.max(vals[2]), 1e-5), cmap='hot')
                     cbar_ax = fig.add_axes([0.91, 0.2, 0.03, 0.65]) # left, bottom, width, height
                     fig.colorbar(CS, cax=cbar_ax)
@@ -407,4 +409,5 @@ class BolfiInferenceTask():
                     logger.critical(tb)
                 pdf.savefig()
                 pl.close()
+        return ret
 

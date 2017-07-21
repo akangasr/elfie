@@ -167,7 +167,7 @@ class PlottingPhase(InferencePhase):
     def _run(self, inference_task, ret):
         if self.pdf is not None:
             logger.info("Plotting posterior")
-            inference_task.plot_post(self.pdf, self.figsize)
+            ret["plots"] = inference_task.plot_post(self.pdf, self.figsize)
             if self.plot_data is not None:
                 if "MD_sim" in ret.keys():
                     self._plot_datas(inference_task, ret["MD_sim"], "Minimum discrepancy")
