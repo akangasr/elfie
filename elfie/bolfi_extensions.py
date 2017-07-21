@@ -229,10 +229,11 @@ class BolfiInferenceTask():
 
     def _optimize(self):
         class _Target():
-            def __init__(self, calls, model, parameters, discname, obsnodename):
+            def __init__(self, calls, model, bounds, parameters, discname, obsnodename):
                 self.calls = calls
                 self.samples = list()
                 self.md = model
+                self.bd = bounds
                 self.pn = parameters
                 self.dn = discname
                 self.on = obsnodename
@@ -245,28 +246,36 @@ class BolfiInferenceTask():
                 ret = _compute(self.md, [self.dn], [wv], self.dn, self.on)
                 logger.info("Result: {}".format(ret))
                 ret = float(ret[0][self.dn][0])
+                for xi, bi in zip(x, self.bd):
+                    if xi < bi[0] or xi > bi[1]:
+                        logger.warning("Tried to sample outside bounds, returning large discrepancy")
+                        ret = 1e10
+                        break
                 self.samples.append((wv, ret))
                 return ret
 
         self.MD = dict()
         self.MD_val = None
+        bounds = [self.params.bounds[p] for p in self.paramnames]
         target = _Target(int(self.params.n_samples),
                          self.model,
+                         bounds,
                          self.paramnames,
                          self.discname,
                          self.obsnodename)
-        bounds = [self.params.bounds[p] for p in self.paramnames]
         logger.info("Starting optimization with bounds {}, total {} function calls".format(bounds, target.calls))
+        locs = list()
+        vals = list()
         while target.calls > 0:
             if self.opt == "lbfgsb":
                 method = "L-BFGS-B"
-                options = {"disp": True,
-                           "maxfun": int(target.calls)}
+                options = {"eps": 1e-3}
             if self.opt == "neldermead":
                 method = "Nelder-Mead"
-                options = {"disp": True,
-                           "maxfev": int(target.calls)}
+                options = {}
             x0 = [np.random.uniform(*b) for b in bounds]  # TODO: randomstate?
+            print("x0", x0)
+            print("bounds", bounds)
             logger.info("Optimization ({}) started from {}, {} function calls left".format(method, x0, target.calls))
             try:
                 r = sp.optimize.minimize(fun=target,
@@ -274,12 +283,27 @@ class BolfiInferenceTask():
                                          method=method,
                                          bounds=bounds,
                                          options=options)
-                loc = r.x
+                loc = {p: float(v) for p, v in zip(self.paramnames, r.x)}
                 val = float(r.fun)
                 logger.info("Optimum at {} (value {}), {} function calls remaining".format(loc, val, target.calls))
+                locs.append(loc)
+                vals.append(val)
+                target.samples = list()
             except ValueError as e:
                 logger.info(e)
-        for loc, val in target.samples:
+                if len(locs) == 0:
+                    # if optimization ends before the first convergence, then
+                    # extract sampled location with smallest observed value
+                    minloc = None
+                    minval = None
+                    for loc, val in target.samples:
+                        if minval is None or minval > val:
+                            minloc = loc
+                            minval = val
+                    logger.info("Smallest value observed at {} (value {}), {} function calls remaining".format(minloc, minval, target.calls))
+                    locs.append(minloc)
+                    vals.append(minval)
+        for loc, val in zip(locs, vals):
             if self.MD_val is None or self.MD_val > val:
                 self.MD = loc
                 self.MD_val = val
