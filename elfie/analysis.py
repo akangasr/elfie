@@ -95,7 +95,7 @@ class ExperimentGroup():
                     means = np.array(means)
                     stds = np.array(stds)
                     pl.plot(samples, means, marker=".", color=colors[label], label=label)
-                    pl.fill_between(samples, means+stds, means-stds, facecolor=colors[label], alpha=alpha)
+                    #pl.fill_between(samples, means+stds, means-stds, facecolor=colors[label], alpha=alpha)
         if drawn is True:
             pl.title("{} (mean and std)".format(name))
             pl.legend(loc=1)
