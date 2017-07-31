@@ -344,6 +344,8 @@ class BolfiInferenceTask():
 
     def plot_post(self, pdf, figsize):
         if self.post is None:
+            if self.params.grid_tics is not None:
+                return self.plot_grid(pdf, figsize)
             return
 
         logger.debug("Plotting GP model")
@@ -409,5 +411,43 @@ class BolfiInferenceTask():
                     logger.critical(tb)
                 pdf.savefig()
                 pl.close()
+        return ret
+
+    def plot_grid(self, pdf, figsize):
+        names = list()
+        for k in sorted(self.params.bounds.keys()):
+            names.append(k)
+
+        ret = dict()
+        logger.debug("Plotting grid")
+        fig, ax = pl.subplots(1,1,figsize=figsize)
+        try:
+            ax.set_title("Grid")
+            ax.set_xlabel(names[0], fontsize=20)
+            ax.set_ylabel(names[1], fontsize=20)
+            img = list()
+            for x in self.params.grid_tics[0]:
+                row = list()
+                for y in self.params.grid_tics[1]:
+                    for i in range(len(self.samples)):
+                        if self.samples[i]["X"][names[0]] == x and \
+                           self.samples[i]["X"][names[1]] == y:
+                            row.append(float(self.samples[i]["Y"]))
+                            break
+                img.append(row)
+            img_np = np.array(img)
+            mx = max(np.max(np.max(img_np)), 1e-5)
+            img_s = img_np / mx
+            im = pl.imshow(img_s, cmap='hot')
+            cbar_ax = fig.add_axes([0.91, 0.2, 0.03, 0.65]) # left, bottom, width, height
+            fig.colorbar(im, cax=cbar_ax)
+            ret = {"grid": img, "tics": self.params.grid_tics}
+            pl.show()
+        except Exception as e:
+            fig.text(0.02, 0.02, "Was not able to plot grid: {}".format(e))
+            tb = traceback.format_exc()
+            logger.critical(tb)
+        pdf.savefig()
+        pl.close()
         return ret
 
