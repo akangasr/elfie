@@ -359,6 +359,32 @@ class BolfiInferenceTask():
         pdf.savefig()
         pl.close()
 
+        logger.debug("Plotting GP model residuals")
+        fig, (ax1, ax2) = pl.subplots(1,2,figsize=figsize)
+        try:
+            errs = list()
+            aerrs = list()
+            for sample in self.samples.values():
+                x = list()
+                for name in sorted(sample["X"].keys()):
+                    x.append(float(sample["X"][name]))
+                val = float(sample["Y"])
+                pred, _ = self.post.model.predict(x, noiseless=True)
+                err = pred - val
+                aerr = abs(err)
+                errs.append(err)
+                aerrs.append(aerr)
+            ax1.hist(errs, 20)
+            ax1.set_title("Residual errors")
+            ax2.hist(aerrs, 20)
+            ax2.set_title("Residual absolute errors")
+        except Exception as e:
+            fig.text(0.02, 0.02, "Was not able to plot GP model: {}".format(e))
+            tb = traceback.format_exc()
+            logger.critical(tb)
+        pdf.savefig()
+        pl.close()
+
         bounds = list()
         names = list()
         for k in sorted(self.params.bounds.keys()):
@@ -422,7 +448,7 @@ class BolfiInferenceTask():
         logger.debug("Plotting grid")
         fig, ax = pl.subplots(1,1,figsize=figsize)
         try:
-            ax.set_title("Grid")
+            ax.set_title("Discrepancy (grid samples)")
             ax.set_xlabel(names[0], fontsize=20)
             ax.set_ylabel(names[1], fontsize=20)
             img = list()
