@@ -50,7 +50,7 @@ class ModelParams():
                 delta = (p["maxv"] - p["minv"])/float(p["ntics"])
                 d = rs.uniform(0.0, delta)
                 minv = p["minv"] + d
-                maxv = p["maxv"] - d
+                maxv = p["maxv"] - (delta - d)
                 tics = np.linspace(minv, maxv, p["ntics"]).tolist()
                 ret.append(tics)
         print("TICS", ret)
