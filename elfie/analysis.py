@@ -55,7 +55,7 @@ class ExperimentGroup():
                     print("  - {}: skip".format(m))
         print("")
 
-    def plot_value_mean_std(self, name, getters, colors=None, alpha=0.25):
+    def plot_value_mean_std(self, name, getters, x_getters=None, colors=None, alpha=0.25):
         if colors is None:
             colors = {
                     "BO": "skyblue",
@@ -67,12 +67,18 @@ class ExperimentGroup():
                     "NELDERMEAD": "m"}
         if type(getters) is not dict:
             getters = {"": getters}
+        if type(x_getters) is not dict:
+            x_getters = {"": lambda e: e.samples}
         drawn = False
         for m in sorted(self.methods.keys()):
             for n, getter in getters.items():
+                if n in x_getters.keys():
+                    x_getter = x_getters[n]
+                else:
+                    x_getter = x_getters[""]
                 means = list()
                 stds = list()
-                samples = list()
+                x = list()
                 label = "{} {}".format(m, n).upper().strip()
                 if label == "BO ML":
                     label = "ABC ML"
@@ -86,7 +92,7 @@ class ExperimentGroup():
                         std = self.get_filt_agg(getter, lambda e: e.method==m and e.samples==s, np.std)
                         means.append(mean)
                         stds.append(std)
-                        samples.append(s)
+                        x.append(self.get_filt_agg(x_getter, lambda e: e.method==m and e.samples==s, np.mean))
                     except Exception as e:
                         print("skip {} ({})".format(label, e))
                         pass
@@ -94,12 +100,11 @@ class ExperimentGroup():
                     drawn = True
                     means = np.array(means)
                     stds = np.array(stds)
-                    pl.plot(samples, means, marker=".", color=colors[label], label=label)
-                    #pl.fill_between(samples, means+stds, means-stds, facecolor=colors[label], alpha=alpha)
+                    pl.plot(x, means, marker=".", color=colors[label], label=label)
+                    #pl.fill_between(x, means+stds, means-stds, facecolor=colors[label], alpha=alpha)
         if drawn is True:
             pl.title("{} (mean and std)".format(name))
             pl.legend(loc=1)
-            pl.xlabel("Samples")
             pl.show()
 
 
