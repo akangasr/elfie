@@ -361,25 +361,40 @@ class BolfiInferenceTask():
         pdf.savefig()
         pl.close()
 
+        ret = dict()
         logger.debug("Plotting GP model residuals")
-        fig, (ax1, ax2) = pl.subplots(1,2,figsize=figsize)
+        fig, (ax1, ax2) = pl.subplots(2,1,figsize=figsize)
         try:
             errs = list()
             aerrs = list()
+            stds = list()
             for sample in self.samples.values():
                 x = list()
                 for name in sorted(sample["X"].keys()):
                     x.append(float(sample["X"][name]))
                 val = float(sample["Y"])
-                pred, _ = self.post.model.predict(x, noiseless=True)
-                err = pred - val
+                mean, std = self.post.model.predict(x, noiseless=True)
+                err = float(mean - val)
                 aerr = abs(err)
                 errs.append(err)
                 aerrs.append(aerr)
-            ax1.hist(errs, 20)
+                stds.append(std)
+            mean_std = np.mean(stds)
+            min_std = min(stds)
+            max_std = max(stds)
+            minv = -4*mean_std
+            maxv = 4*mean_std
+            x1 = np.linspace(minv, maxv, 100)
+            ax1.plot(x1, sp.stats.norm.pdf(x1, 0, max_std).flatten())
+            ax1.plot(x1, sp.stats.norm.pdf(x1, 0, min_std).flatten())
+            ax1.hist(np.array(errs), 20, (minv, maxv), normed=True)
             ax1.set_title("Residual errors")
-            ax2.hist(aerrs, 20)
+            x2 = np.linspace(0, maxv, 100)
+            ax2.plot(x2, sp.stats.norm.pdf(x2, 0, max_std).flatten())
+            ax2.plot(x2, sp.stats.norm.pdf(x2, 0, min_std).flatten())
+            ax2.hist(np.array(aerrs), 20, (0, maxv), normed=True)
             ax2.set_title("Residual absolute errors")
+            ret["residuals"] = {"errs": errs, "stds": stds}
         except Exception as e:
             fig.text(0.02, 0.02, "Was not able to plot GP model: {}".format(e))
             tb = traceback.format_exc()
@@ -393,7 +408,6 @@ class BolfiInferenceTask():
             bounds.append(self.params.bounds[k])
             names.append(k)
 
-        ret = dict()
         for fname, fun in [("GP mean", lambda x: self.post.model.predict(x)[0][:,0]),
                            ("GP std", lambda x: self.post.model.predict(x)[1][:,0]),
                            ("Prior density", self.post.prior.pdf),
