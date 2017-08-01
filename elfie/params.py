@@ -56,3 +56,5 @@ class ModelParams():
         print("TICS", ret)
         return ret
 
+    def get_L(self):
+        return [p["L"] for p in self.parameters if p["distr"] is not "constant"]

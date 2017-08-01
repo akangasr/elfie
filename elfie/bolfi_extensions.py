@@ -36,6 +36,7 @@ class BolfiParams():
             noise_var=0.05,
             kernel_var=0.05,
             kernel_scale=0.1,
+            L=None,
             ARD=False,
             gp_params_optimizer="scg",
             gp_params_max_opt_iters=50,
@@ -98,7 +99,8 @@ class BolfiFactory():
             return GPLCA(LCBSC(delta=self.params.acq_delta,
                                max_opt_iters=self.params.acq_opt_iterations,
                                noise_cov=self.params.acq_noise_cov,
-                               model=gp))
+                               model=gp),
+                         L=self.params.L)
         logger.critical("Unknown sampling type '{}', aborting!".format(self.params.sampling_type))
         assert False
 

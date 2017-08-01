@@ -65,11 +65,14 @@ class GPLCA(AcquisitionBase):
         x -> [0, inf), positive squashing function
     p : callable
         (x, x', L, M) -> [0, 1], penalization kernel
+    L : list or None
+        Lipschitz constants for parameters (if None then will estimate)
     """
-    def __init__(self, a, g=soft_plus, p=phi):
+    def __init__(self, a, g=soft_plus, p=phi, L=None):
         self.a = a
         self.g = g
         self.p = p
+        self.L_fix = L
         super(GPLCA, self).__init__(model=self.a.model)
 
     def acquire(self, n_values, pending_locations=None, t=None):
@@ -79,7 +82,10 @@ class GPLCA(AcquisitionBase):
             pl = None
         else:
             pl = pending_locations[:]
-        self.L = self.estimate_L(t)
+        if self.L_fix is None:
+            self.L = self.estimate_L(t)
+        else:
+            self.L = self.L_fix
         self.M = self.estimate_M(t)
         for i in range(n_values):
             logger.info("Finding acquisition minimum..")
@@ -106,7 +112,7 @@ class GPLCA(AcquisitionBase):
         for i in range(len(self.model.bounds)):
             logger.info("Estimating L {}..".format(i))
             grad_obj = lambda x: -np.abs(float(self.a.evaluate_gradient(x, t=t)[0][i]))  # abs max
-            loc, val = minimize(grad_obj, self.model.bounds, random_state=self.a.random_state, maxiter=100, n_start_points=1)  # expensive to evaluate
+            loc, val = minimize(grad_obj, self.model.bounds, random_state=self.a.random_state, maxiter=300, n_start_points=3)  # expensive to evaluate
             L.append(abs(val))
         return L
 
