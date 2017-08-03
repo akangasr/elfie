@@ -384,15 +384,17 @@ class BolfiInferenceTask():
             max_std = max(stds)
             minv = -4*mean_std
             maxv = 4*mean_std
+            errs_lim = [max(min(minv+1e-5, e), maxv-1e-5) for e in errs]
+            aerrs_lim = [max(min(1e-5, e), maxv-1e-5) for e in aerrs]
             x1 = np.linspace(minv, maxv, 100)
             ax1.plot(x1, sp.stats.norm.pdf(x1, 0, max_std))
             ax1.plot(x1, sp.stats.norm.pdf(x1, 0, min_std))
-            ax1.hist(np.array(errs), 20, (minv, maxv), normed=True)
+            ax1.hist(np.array(errs_lim), 20, (minv, maxv), normed=True)
             ax1.set_title("Residual errors")
             x2 = np.linspace(0, maxv, 100)
             ax2.plot(x2, sp.stats.norm.pdf(x2, 0, max_std))
             ax2.plot(x2, sp.stats.norm.pdf(x2, 0, min_std))
-            ax2.hist(np.array(aerrs), 20, (0, maxv), normed=True)
+            ax2.hist(np.array(aerrs_lim), 20, (0, maxv), normed=True)
             ax2.set_title("Residual absolute errors")
             ret["residuals"] = {"errs": errs, "stds": stds}
         except Exception as e:
@@ -441,7 +443,7 @@ class BolfiInferenceTask():
                                         bounds[1][0],
                                         bounds[0][1],
                                         bounds[1][1],
-                                        100, 100, fun)
+                                        150, 150, fun)
                     ret[fname] = {"X": vals[0].tolist(), "Y": vals[1].tolist(), "Z": vals[2].tolist()}
                     CS = ax.contourf(vals[0], vals[1], vals[2] / max(np.max(vals[2]), 1e-5), cmap='hot')
                     cbar_ax = fig.add_axes([0.91, 0.2, 0.03, 0.65]) # left, bottom, width, height
@@ -468,9 +470,9 @@ class BolfiInferenceTask():
             ax.set_xlabel(names[0], fontsize=20)
             ax.set_ylabel(names[1], fontsize=20)
             img = list()
-            for x in self.params.grid_tics[0]:
+            for y in self.params.grid_tics[1]:
                 row = list()
-                for y in self.params.grid_tics[1]:
+                for x in self.params.grid_tics[0]:
                     for i in range(len(self.samples)):
                         if self.samples[i]["X"][names[0]] == x and \
                            self.samples[i]["X"][names[1]] == y:
