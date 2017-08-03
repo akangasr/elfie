@@ -12,6 +12,7 @@ from elfi.methods.parameter_inference import BOLFI, Rejection
 from elfi.methods.posteriors import BolfiPosterior
 from elfi.methods.bo.acquisition import UniformAcquisition, LCBSC
 from elfi.store import OutputPool
+from elfi.methods.bo.utils import minimize
 
 from elfie.acquisition import GridAcquisition, GPLCA
 from elfie.outputpool_extensions import SerializableOutputPool
@@ -41,6 +42,7 @@ class BolfiParams():
             gp_params_optimizer="scg",
             gp_params_max_opt_iters=50,
             gp_params_update_interval=0,
+            abc_threshold_delta=0,
             acq_delta=0.1,
             acq_noise_cov=0.1,
             acq_opt_iterations=100,
@@ -316,7 +318,13 @@ class BolfiInferenceTask():
 
     def compute_posterior(self):
         """ Constructs posterior """
-        self.post = self.bolfi.extract_posterior()
+        bounds = list()
+        for k in sorted(self.params.bounds.keys()):
+            bounds.append(self.params.bounds[k])
+        loc, val = minimize(lambda x: self.bolfi.target_model.predict(x, noiseless=True)[0], bounds)
+        mean, std = self.bolfi.target_model.predict(loc, noiseless=True)
+        threshold = mean + self.params.abc_threshold_delta
+        self.post = self.bolfi.extract_posterior(threshold=threshold)
 
     def compute_ML(self):
         """ Computes ML sample """
