@@ -242,17 +242,17 @@ class BolfiInferenceTask():
             def __call__(self, x):
                 if self.calls < 1:
                     raise ValueError("No calls left")
+                for xi, bi in zip(x, self.bd):
+                    if xi < bi[0] or xi > bi[1]:
+                        logger.warning("Tried to sample outside bounds, returning large discrepancy")
+                        ret = 1e10
+                        break
                 self.calls -= 1
                 wv = {p: v for p, v in zip(self.pn, x)}
                 logger.info("Evaluating at {}, {} calls left".format(wv, self.calls))
                 ret = _compute(self.md, [self.dn], [wv], self.dn, self.on)
                 logger.info("Result: {}".format(ret))
                 ret = float(ret[0][self.dn][0])
-                for xi, bi in zip(x, self.bd):
-                    if xi < bi[0] or xi > bi[1]:
-                        logger.warning("Tried to sample outside bounds, returning large discrepancy")
-                        ret = 1e10
-                        break
                 self.samples.append((wv, ret))
                 return ret
 
