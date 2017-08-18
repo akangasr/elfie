@@ -157,6 +157,8 @@ class GPLCA(AcquisitionBase):
 
     def _debug_print(self, name, obj, loc=None):
         """debug printout"""
+        if len(self.model.bounds) != 2:
+            return
         tics = 10
         maxv = float("-inf")
         minv = float("inf")
