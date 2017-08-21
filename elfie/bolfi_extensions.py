@@ -326,6 +326,17 @@ class BolfiInferenceTask():
         threshold = mean + self.params.abc_threshold_delta
         self.post = self.bolfi.extract_posterior(threshold=threshold)
 
+    def compute_MED(self):
+        """ Computes minimum expected discrepancy sample """
+        self.MED = dict()
+        self.MED_val = None
+        for idx, sample in self.samples.items():
+            x = np.array([sample["X"][k] for k in self.paramnames])
+            mean, std = self.post.model.predict(x, noiseless=True)
+            if self.MED_val is None or mean < self.MED_val:
+                self.MED_val = mean
+                self.MED = sample["X"]
+
     def compute_ML(self):
         """ Computes ML sample """
         self.ML = dict()

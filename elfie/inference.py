@@ -94,11 +94,14 @@ class PosteriorAnalysisPhase(InferencePhase):
             return ret
         post_start = time.time()
         inference_task.compute_posterior()
+        inference_task.compute_MED()
         inference_task.compute_ML()
         inference_task.compute_MAP()
         post_end = time.time()
         ret["post_duration"] = post_end - post_start
         ret["post"] = "TODO" #inference_task.post.to_dict()
+        ret["MED"] = inference_task.MED
+        ret["MED_val"] = float(inference_task.MED_val)
         ret["ML"] = inference_task.ML
         ret["ML_val"] = float(inference_task.ML_val)
         ret["MAP"] = inference_task.MAP
@@ -138,6 +141,8 @@ class PointEstimateSimulationPhase(InferencePhase):
         logger.info("Simulating near MD")
         ret["MD_sim"] = self._simulate_around(inference_task, ret["MD"])
         if "MAP" in ret.keys():
+            logger.info("Simulating near MED")
+            ret["MED_sim"] = self._simulate_around(inference_task, ret["MED"])
             logger.info("Simulating near ML")
             ret["ML_sim"] = self._simulate_around(inference_task, ret["ML"])
             logger.info("Simulating near MAP")
@@ -173,6 +178,8 @@ class PlottingPhase(InferencePhase):
             if self.plot_data is not None:
                 if "MD_sim" in ret.keys():
                     self._plot_datas(inference_task, ret["MD_sim"], "Minimum discrepancy")
+                if "MED_sim" in ret.keys():
+                    self._plot_datas(inference_task, ret["MED_sim"], "MED")
                 if "ML_sim" in ret.keys():
                     self._plot_datas(inference_task, ret["ML_sim"], "ML")
                 if "MAP_sim" in ret.keys():
@@ -198,6 +205,7 @@ class GroundTruthErrorPhase(InferencePhase):
         if self.ground_truth is not None:
             ret["MD_gt_err"] = rmse(ret["MD"], self.ground_truth)
             if "MAP" in ret.keys():
+                ret["MED_gt_err"] = rmse(ret["MED"], self.ground_truth)
                 ret["ML_gt_err"] = rmse(ret["ML"], self.ground_truth)
                 ret["MAP_gt_err"] = rmse(ret["MAP"], self.ground_truth)
         else:
@@ -221,6 +229,8 @@ class PredictionErrorPhase(InferencePhase):
             logger.info("Estimating MD prediction error")
             ret["MD_errs"] = self._compute_errors(inference_task, ret["MD_sim"])
             if "MAP" in ret.keys():
+                logger.info("Estimating MED prediction error")
+                ret["MED_errs"] = self._compute_errors(inference_task, ret["MED_sim"])
                 logger.info("Estimating ML prediction error")
                 ret["ML_errs"] = self._compute_errors(inference_task, ret["ML_sim"])
                 logger.info("Estimating MAP prediction error")
