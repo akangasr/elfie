@@ -75,6 +75,8 @@ class SamplingPhase(InferencePhase):
         ret["sampling_duration"] = sampling_end - sampling_start
         if inference_task.pool is not None:
             ret["sample_pool"] = inference_task.pool.to_dict()
+        ret["samples"] = inference_task.samples
+        ret["n_samples"] = len(inference_task.samples)
         ret["MD"] = inference_task.MD
         ret["MD_val"] = inference_task.MD_val
         return ret

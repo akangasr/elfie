@@ -370,36 +370,7 @@ class BolfiInferenceTask():
         pl.close()
 
         ret = dict()
-        logger.debug("Plotting GP model residuals")
-        fig, (ax1, ax2) = pl.subplots(2,1,figsize=figsize)
-        try:
-            errs = list()
-            aerrs = list()
-            stds = list()
-            for sample in self.samples.values():
-                x = list()
-                for name in sorted(sample["X"].keys()):
-                    x.append(float(sample["X"][name]))
-                val = float(sample["Y"])
-                mean, std = self.post.model.predict(x, noiseless=True)
-                err = float(mean - val)
-                aerr = abs(err)
-                errs.append(err)
-                aerrs.append(aerr)
-                stds.append(float(std))
-            minv = min(errs)
-            maxv = max(errs)
-            x1 = np.linspace(minv, maxv, 100)
-            ax1.hist(np.array(errs), 30, (minv, maxv), normed=True)
-            ax1.set_title("Residual errors")
-            x2 = np.linspace(0, maxv, 100)
-            ax2.hist(np.array(aerrs), 30, (0, maxv), normed=True)
-            ax2.set_title("Residual absolute errors")
-            ret["residuals"] = {"errs": errs, "stds": stds}
-        except Exception as e:
-            fig.text(0.02, 0.02, "Was not able to plot GP model: {}".format(e))
-            tb = traceback.format_exc()
-            logger.critical(tb)
+        ret = plot_residuals(self.samples, self.post.model, figsize, ret)
         pdf.savefig()
         pl.close()
 
@@ -493,4 +464,44 @@ class BolfiInferenceTask():
         pdf.savefig()
         pl.close()
         return ret
+
+
+def get_residuals(samples, gp):
+    errs = list()
+    aerrs = list()
+    stds = list()
+    for sample in samples.values():
+        x = list()
+        for name in sorted(sample["X"].keys()):
+            x.append(float(sample["X"][name]))
+        val = float(sample["Y"])
+        mean, std = gp.predict(x, noiseless=True)
+        err = float(mean - val)
+        aerr = abs(err)
+        errs.append(err)
+        aerrs.append(aerr)
+        stds.append(float(std))
+    return errs, aerrs, stds
+
+
+def plot_residuals(samples, gp, figsize, ret=None):
+    logger.debug("Plotting GP model residuals")
+    fig, (ax1, ax2) = pl.subplots(2,1,figsize=figsize)
+    try:
+        errs, aerrs, stds = get_residuals(samples, gp)
+        minv = min(errs)
+        maxv = max(errs)
+        x1 = np.linspace(minv, maxv, 100)
+        ax1.hist(np.array(errs), 30, (minv, maxv), normed=True)
+        ax1.set_title("Residual errors")
+        x2 = np.linspace(0, maxv, 100)
+        ax2.hist(np.array(aerrs), 30, (0, maxv), normed=True)
+        ax2.set_title("Residual absolute errors")
+        if ret is not None:
+            ret["residuals"] = {"errs": errs, "stds": stds}
+    except Exception as e:
+        fig.text(0.02, 0.02, "Was not able to plot GP model: {}".format(e))
+        tb = traceback.format_exc()
+        logger.critical(tb)
+    return ret
 
