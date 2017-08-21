@@ -361,12 +361,27 @@ class BolfiInferenceTask():
         logger.debug("Plotting GP model")
         fig = pl.figure(figsize=figsize)
         try:
-            self.post.model._gp.plot()
+            n_params = len(self.MAP)
+            param_names = sorted(self.MAP.keys())
+            MAP_vals = [float(self.MAP[k]) for k in param_names]
+            for i in range(n_params-1):
+                for j in range(i, n_params):
+                    fixed_inputs = list()
+                    for k in range(n_params):
+                        if k != i and k != j:
+                            fixed_inputs.append((k, MAP_vals[k]))
+                    fig = pl.figure(figsize=figsize)
+                    self.post.model._gp.plot(fixed_inputs=fixed_inputs)
+                    pl.xlabel(param_names[i])
+                    if i != j:
+                        pl.ylabel(param_names[j])
+                    pdf.savefig()
+                    pl.close()
+
         except Exception as e:
             fig.text(0.02, 0.02, "Was not able to plot GP model: {}".format(e))
             tb = traceback.format_exc()
             logger.critical(tb)
-        pdf.savefig()
         pl.close()
 
         ret = dict()
@@ -489,13 +504,13 @@ def plot_residuals(samples, gp, figsize, ret=None):
     fig, (ax1, ax2) = pl.subplots(2,1,figsize=figsize)
     try:
         errs, aerrs, stds = get_residuals(samples, gp)
-        minv = min(errs)
-        maxv = max(errs)
+        minv = -max(aerrs)
+        maxv = max(aerrs)
         x1 = np.linspace(minv, maxv, 100)
-        ax1.hist(np.array(errs), 30, (minv, maxv), normed=True)
+        ax1.hist(np.array(errs), 30, (minv-1e-5, maxv+1e-5), normed=True)
         ax1.set_title("Residual errors")
         x2 = np.linspace(0, maxv, 100)
-        ax2.hist(np.array(aerrs), 30, (0, maxv), normed=True)
+        ax2.hist(np.array(aerrs), 30, (-1e-5, maxv+1e-5), normed=True)
         ax2.set_title("Residual absolute errors")
         if ret is not None:
             ret["residuals"] = {"errs": errs, "stds": stds}
