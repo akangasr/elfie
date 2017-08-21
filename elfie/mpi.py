@@ -211,9 +211,9 @@ class MPIClient(ClientBase):
     def apply_sync(self, kallable, *args, **kwargs):
         """ add job to list and wait until finished, return result """
         idx = self.apply(kallable, *args, **kwargs)
-        return self.get(idx)
+        return self.get_result(idx)
 
-    def get(self, idx):
+    def get_result(self, idx):
         """ wait until this job is finished, return result """
         idx, result = self.wait_next([idx])
         return result

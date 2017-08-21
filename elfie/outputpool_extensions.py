@@ -7,7 +7,7 @@ class SerializableOutputPool(OutputPool):
 
     def to_dict(self):
         stores = dict()
-        for k, v in self.output_stores.items():
+        for k, v in self.stores.items():
             d = dict()
             for kk, vv in v.items():
                 d[kk] = vv.tolist()  # np.array to list

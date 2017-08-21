@@ -196,10 +196,10 @@ class GroundTruthErrorPhase(InferencePhase):
 
     def _run(self, inference_task, ret):
         if self.ground_truth is not None:
-            ret["MD_err"] = rmse(ret["MD"], self.ground_truth)
+            ret["MD_gt_err"] = rmse(ret["MD"], self.ground_truth)
             if "MAP" in ret.keys():
-                ret["ML_err"] = rmse(ret["ML"], self.ground_truth)
-                ret["MAP_err"] = rmse(ret["MAP"], self.ground_truth)
+                ret["ML_gt_err"] = rmse(ret["ML"], self.ground_truth)
+                ret["MAP_gt_err"] = rmse(ret["MAP"], self.ground_truth)
         else:
             logger.info("Pass, no ground truth parameters.")
         return ret
@@ -268,6 +268,7 @@ def rmse(a, b):
     """ RMSE for dictionaries """
     sqerr = []
     for k in a.keys():
-        sqerr.append((float(a[k]) - float(b[k])) ** 2)
+        k2 = k[4:]  # strip prefix
+        sqerr.append((float(a[k]) - float(b[k2])) ** 2)
     return float(np.sqrt(np.mean(sqerr)))
 

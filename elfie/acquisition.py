@@ -79,7 +79,7 @@ class GPLCA(AcquisitionBase):
         logger.info("Acquiring sample location..")
         ret = np.zeros((n_values, len(self.model.bounds)))
         if pending_locations is None:
-            pl = None
+            pl = []
         else:
             pl = pending_locations[:]
         if self.L_fix is None:

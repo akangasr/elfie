@@ -100,7 +100,7 @@ class BolfiFactory():
         if self.params.sampling_type == "bo":
             return GPLCA(LCBSC(delta=self.params.acq_delta,
                                max_opt_iters=self.params.acq_opt_iterations,
-                               noise_cov=self.params.acq_noise_cov,
+                               noise_var=self.params.acq_noise_cov,
                                model=gp),
                          L=self.params.L)
         logger.critical("Unknown sampling type '{}', aborting!".format(self.params.sampling_type))
