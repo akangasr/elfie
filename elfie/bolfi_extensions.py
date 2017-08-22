@@ -270,6 +270,7 @@ class BolfiInferenceTask():
         logger.info("Starting optimization with bounds {}, total {} function calls".format(bounds, target.calls))
         locs = list()
         vals = list()
+        samples = list()
         while target.calls > 0:
             if self.opt == "lbfgsb":
                 method = "L-BFGS-B"
@@ -292,7 +293,6 @@ class BolfiInferenceTask():
                 logger.info("Optimum at {} (value {}), {} function calls remaining".format(loc, val, target.calls))
                 locs.append(loc)
                 vals.append(val)
-                target.samples = list()
             except ValueError as e:
                 logger.info(e)
                 if len(locs) == 0:
@@ -307,6 +307,13 @@ class BolfiInferenceTask():
                     logger.info("Smallest value observed at {} (value {}), {} function calls remaining".format(minloc, minval, target.calls))
                     locs.append(minloc)
                     vals.append(minval)
+            samples.extend(target.samples)
+            target.samples = list()
+        self.samples = dict()
+        idx = 0
+        for loc, val in samples:
+            self.samples[idx] = {"X": loc, "Y": val}
+            idx += 1
         for loc, val in zip(locs, vals):
             if self.MD_val is None or self.MD_val > val:
                 self.MD = loc
