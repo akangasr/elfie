@@ -2,6 +2,7 @@ import sys
 import traceback
 import time
 import itertools
+import gc
 from enum import IntEnum
 from collections import deque
 
@@ -86,10 +87,12 @@ def _worker_loop(comm, rank, size, status, dummy):
         tag = status.Get_tag()
 
         if tag == Tag.RECV:
+            gc.collect()
             task = comm.recv(None, source=0, tag=Tag.TASK)
             logger.debug("MPI WORKER {}: Executing task {}..".format(rank, task))
             task.run()
             comm.send(task, dest=0, tag=Tag.READY)
+            del task
         elif tag == Tag.END:
             break
         else:
@@ -227,8 +230,10 @@ class MPIClient(ClientBase):
                 if self.is_ready(idx):
                     if self.ready_tasks[idx] == None:
                         raise ValueError("Result for task {} already fetched".format(idx))
-                    ret = idx, self.ready_tasks[idx].result
-                    self.ready_tasks[idx] = None  # reduce memory consumption, assume no re-fetching of results
+                    ret = (idx, self.ready_tasks[idx].result)
+                    del self.ready_tasks[idx]
+                    gc.collect()
+                    self.ready_tasks[idx] = None
                     return ret
             self._wait_for_next_ready()
 

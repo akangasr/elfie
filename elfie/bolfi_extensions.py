@@ -334,6 +334,7 @@ class BolfiInferenceTask():
         for idx, sample in self.samples.items():
             x = np.array([sample["X"][k] for k in self.paramnames])
             mean, std = self.bolfi.target_model.predict(x, noiseless=True)
+            mean = float(mean)
             if minval is None or mean < minval:
                 minval = mean
         self.threshold = minval + self.params.abc_threshold_delta
