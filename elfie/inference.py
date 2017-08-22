@@ -95,6 +95,7 @@ class PosteriorAnalysisPhase(InferencePhase):
             inference_task.compute_MAP()
             post_end = time.time()
             ret["post_duration"] = post_end - post_start
+            ret["threshold"] = inference_task.threshold
             #ret["post"] = inference_task.post.to_dict()  # TODO
         if "MD" in self.types:
             ret["MD"] = inference_task.MD

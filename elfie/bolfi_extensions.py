@@ -325,13 +325,19 @@ class BolfiInferenceTask():
 
     def compute_posterior(self):
         """ Constructs posterior """
-        bounds = list()
-        for k in sorted(self.params.bounds.keys()):
-            bounds.append(self.params.bounds[k])
-        loc, val = minimize(lambda x: self.bolfi.target_model.predict(x, noiseless=True)[0], bounds)
-        mean, std = self.bolfi.target_model.predict(loc, noiseless=True)
-        threshold = mean + self.params.abc_threshold_delta
-        self.post = self.bolfi.extract_posterior(threshold=threshold)
+        #bounds = list()
+        #for k in sorted(self.params.bounds.keys()):
+        #    bounds.append(self.params.bounds[k])
+        #loc, val = minimize(lambda x: self.bolfi.target_model.predict(x, noiseless=True)[0], bounds)
+        #mean, std = self.bolfi.target_model.predict(loc, noiseless=True)
+        minval = None
+        for idx, sample in self.samples.items():
+            x = np.array([sample["X"][k] for k in self.paramnames])
+            mean, std = self.bolfi.target_model.predict(x, noiseless=True)
+            if minval is None or mean < minval:
+                minval = mean
+        self.threshold = minval + self.params.abc_threshold_delta
+        self.post = self.bolfi.extract_posterior(threshold=self.threshold)
 
     def compute_MED(self):
         """ Computes minimum expected discrepancy sample """
