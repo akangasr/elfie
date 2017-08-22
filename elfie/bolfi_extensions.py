@@ -389,7 +389,7 @@ class BolfiInferenceTask():
             n_params = len(self.MAP)
             param_names = sorted(self.MAP.keys())
             MAP_vals = [float(self.MAP[k]) for k in param_names]
-            for i in range(n_params-1):
+            for i in range(n_params):
                 for j in range(i, n_params):
                     fixed_inputs = list()
                     for k in range(n_params):
