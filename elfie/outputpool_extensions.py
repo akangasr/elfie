@@ -26,10 +26,10 @@ class SerializableOutputPool(OutputPool):
         p.seed = np.uint32(d["seed"])  # int to np.uint32
         stores = dict()
         for k, v in d["output_stores"].items():
-            d = dict()
+            di = dict()
             for kk, vv in v.items():
-                d[int(kk)] = np.array(vv)  # string to int, list to np.array
-            stores[k] = d
-        p.output_stores = stores
+                di[int(kk)] = np.array(vv)  # string to int, list to np.array
+            stores[k] = di
+        p.stores = stores
         return p
 

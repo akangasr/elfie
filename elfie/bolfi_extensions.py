@@ -383,43 +383,25 @@ class BolfiInferenceTask():
                 return self.plot_grid(pdf, figsize)
             return
 
-        logger.debug("Plotting GP model")
-        fig = pl.figure(figsize=figsize)
-        try:
-            n_params = len(self.MAP)
-            param_names = sorted(self.MAP.keys())
-            MAP_vals = [float(self.MAP[k]) for k in param_names]
-            for i in range(n_params):
-                for j in range(i, n_params):
-                    fixed_inputs = list()
-                    for k in range(n_params):
-                        if k != i and k != j:
-                            fixed_inputs.append((k, MAP_vals[k]))
-                    fig = pl.figure(figsize=figsize)
-                    self.post.model._gp.plot(fixed_inputs=fixed_inputs)
-                    pl.xlabel(param_names[i])
-                    if i != j:
-                        pl.ylabel(param_names[j])
-                    pdf.savefig()
-                    pl.close()
-
-        except Exception as e:
-            fig.text(0.02, 0.02, "Was not able to plot GP model: {}".format(e))
-            tb = traceback.format_exc()
-            logger.critical(tb)
-        pl.close()
-
-        ret = dict()
-        logger.debug("Plotting GP model residuals")
-        ret = plot_residuals(self.samples, self.post.model, figsize, ret)
-        pdf.savefig()
-        pl.close()
-
         bounds = list()
         names = list()
         for k in sorted(self.params.bounds.keys()):
             bounds.append(self.params.bounds[k])
             names.append(k)
+
+        if hasattr(self, "MAP"):
+            loc = self.MAP
+        elif hasattr(self, "ML"):
+            loc = self.ML
+        elif hasattr(self, "MED"):
+            loc = self.MED
+
+        logger.debug("Plotting GP model")
+        multiplot(self.post.model._gp.plot, loc, pdf=pdf)
+
+        ret = dict()
+        logger.debug("Plotting GP model residuals")
+        ret["residuals"] = plot_residuals(self.samples, self.post.model, figsize, pdf)
 
         for fname, fun in [("GP mean", lambda x: self.post.model.predict(x)[0][:,0]),
                            ("GP std", lambda x: self.post.model.predict(x)[1][:,0]),
@@ -427,44 +409,9 @@ class BolfiInferenceTask():
                            ("Unnormalized likelihood", self.post._unnormalized_likelihood),
                            ("Unnormalized posterior", self.post.pdf)]:
             n_tics = 150
-            try:
-                logger.debug("Evaluating {}".format(fname))
-                mesh = eval_mesh(bounds, n_tics, fun)
-                ret[fname] = mesh
-            except Exception as e:
-                fig.text(0.02, 0.02, "Was not able to plot {}: {}".format(fname, e))
-                tb = traceback.format_exc()
-                logger.critical(tb)
-                continue
+            logger.debug("Plotting {}".format(fname))
+            multiplot(plot_1d2d, loc, title=fname, pdf=pdf, figsize=figsize, fun=fun, bounds=bounds, n_tics=n_tics)
 
-            if len(self.paramnames) == 1:
-                logger.debug("Plotting {}".format(fname))
-                fig = pl.figure(figsize=figsize)
-                try:
-                    pl.xlabel(names[0], fontsize=20)
-                    pl.ylabel(fname, fontsize=20)
-                    plot_1d(mesh, n_tics)
-                except Exception as e:
-                    fig.text(0.02, 0.02, "Was not able to plot {}: {}".format(fname, e))
-                    tb = traceback.format_exc()
-                    logger.critical(tb)
-                pdf.savefig()
-                pl.close()
-
-            if len(self.paramnames) == 2:
-                logger.debug("Plotting {}".format(fname))
-                fig, ax = pl.subplots(1,1,figsize=figsize)
-                try:
-                    ax.set_title(fname)
-                    ax.set_xlabel(names[0], fontsize=20)
-                    ax.set_ylabel(names[1], fontsize=20)
-                    plot_2d(mesh, n_tics, fig, ax)
-                except Exception as e:
-                    fig.text(0.02, 0.02, "Was not able to plot {}: {}".format(fname, e))
-                    tb = traceback.format_exc()
-                    logger.critical(tb)
-                pdf.savefig()
-                pl.close()
         return ret
 
     def plot_grid(self, pdf, figsize):
@@ -506,57 +453,81 @@ class BolfiInferenceTask():
         return ret
 
 
-def plot_1d(mesh, n_tics):
-    locs = [None] * n_tics
-    vals = [None] * n_tics
-    for k, v in mesh.items():
-        locs[k[0][0]] = k[0][1]
-        vals[k[0][0]] = v
-    pl.plot(locs, vals)
-    pl.show()
+def multiplot(printer, loc, title=None, pdf=None, **kwargs):
+    try:
+        n_params = len(loc)
+        param_names = sorted(loc.keys())
+        vals = [float(loc[k]) for k in param_names]
+        for i in range(n_params):
+            for j in range(i, n_params):
+                fixed_inputs = list()
+                for k in range(n_params):
+                    if k != i and k != j:
+                        fixed_inputs.append((k, vals[k]))
+                printer(fixed_inputs=fixed_inputs, **kwargs)
+                pl.xlabel(param_names[i])
+                if i != j:
+                    pl.ylabel(param_names[j])
+                if title is not None:
+                    pl.title(title)
+                if pdf is not None:
+                    pdf.savefig()
+                    pl.close()
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.critical(tb)
+    if pdf is not None:
+        pl.close()
 
-def plot_2d(mesh, n_tics, fig, ax):
-    img = np.empty((n_tics, n_tics))
-    for loc, val in mesh.items():
-        img[loc[1][0]][loc[0][0]] = val
-    mx = float(np.max(np.max(img)))
-    mn = float(np.min(np.min(img)))
-    img_s = (img - mn) / max(mx - mn, 1e-10)
-    im = pl.imshow(img_s, cmap='hot')
-    cbar_ax = fig.add_axes([0.91, 0.2, 0.03, 0.65]) # left, bottom, width, height
-    fig.colorbar(im, cax=cbar_ax)
-    pl.show()
-
-def eval_mesh(bounds, n_tics, fun):
-    tics = list()
-    for b in bounds:
-        tics.append(np.linspace(b[0], b[1], n_tics).tolist())
-    idx = [0] * len(bounds)
-    ret = dict()
-    end = False
-    while True:
-        loc = tuple([(i, float(tic[idx[i]])) for i, tic in enumerate(tics)])
-        x = [float(tic[idx[i]]) for i, tic in enumerate(tics)]
-        val = fun(x)
-        try:
-            ret[loc] = float(val)
-        except Exception as e:
-            print("Unable to convert fun({}) = {} to float".format(x, val))
-            tb = traceback.format_exc()
-            logger.critical(tb)
-            return None
-        idx[0] += 1
-        for i in range(len(idx)):
-            if idx[i] == n_tics:
-                if i == len(idx) - 1:
-                    end = True
-                    break
-                idx[i] = 0
-                idx[i+1] += 1
-        if end is True:
-            break
-    assert len(ret) == n_tics ** len(bounds)
-    return ret
+def plot_1d2d(fun, bounds, n_tics, figsize, fixed_inputs=list(), pdf=None):
+    try:
+        idx = set(range(len(bounds))) - set([f[0] for f in fixed_inputs])
+        if len(idx) == 1:
+            idx = min(idx)
+            loc = [None] * len(bounds)
+            for i, v in fixed_inputs:
+                loc[i] = v
+            x = np.linspace(bounds[idx][0], bounds[idx][1], n_tics)
+            y = list()
+            for xi in x:
+                loc[idx] = xi
+                y.append(float(fun(loc)))
+            fig = pl.figure(figsize=figsize)
+            pl.plot(x, y)
+            pl.show()
+        elif len(idx) == 2:
+            idx1 = min(idx)
+            idx2 = max(idx)
+            loc = [None] * len(bounds)
+            for i, v in fixed_inputs:
+                loc[i] = v
+            x = np.linspace(bounds[idx1][0], bounds[idx1][1], n_tics)
+            y = np.linspace(bounds[idx2][0], bounds[idx2][1], n_tics)
+            img = np.empty((n_tics, n_tics))
+            for i, xi in enumerate(x):
+                for j, yi in enumerate(y):
+                    loc[idx1] = xi
+                    loc[idx2] = yi
+                    img[j][i] = float(fun(loc))
+            mx = float(np.max(np.max(img)))
+            mn = float(np.min(np.min(img)))
+            img_s = (img - mn) / max(mx - mn, 1e-10)
+            fig = pl.figure(figsize=figsize)
+            im = pl.imshow(img_s, cmap='hot',
+                    extent=[bounds[idx1][0], bounds[idx1][1], bounds[idx2][0], bounds[idx2][1]],
+                    aspect=(bounds[idx1][1]-bounds[idx1][0])/(bounds[idx2][1]-bounds[idx2][0]))
+            #cbar_ax = fig.add_axes([0.91, 0.2, 0.03, 0.65]) # left, bottom, width, height
+            #fig.colorbar(im, cax=cbar_ax)
+            pl.show()
+        else:
+            print("dimension mismatch, bounds={}, fixed_inputs={}".format(len(bounds), fixed_inputs))
+            return
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.critical(tb)
+    if pdf is not None:
+        pdf.savefig()
+        pl.close()
 
 def get_residuals(samples, gp):
     errs = list()
@@ -575,9 +546,9 @@ def get_residuals(samples, gp):
         stds.append(float(std))
     return errs, aerrs, stds
 
-
-def plot_residuals(samples, gp, figsize, ret=None):
+def plot_residuals(samples, gp, figsize, pdf=None):
     fig, (ax1, ax2) = pl.subplots(2,1,figsize=figsize)
+    ret = dict()
     try:
         errs, aerrs, stds = get_residuals(samples, gp)
         minv = -max(aerrs)
@@ -589,10 +560,13 @@ def plot_residuals(samples, gp, figsize, ret=None):
         ax2.hist(np.array(aerrs), 30, (-1e-5, maxv+1e-5), normed=True)
         ax2.set_title("Residual absolute errors")
         if ret is not None:
-            ret["residuals"] = {"errs": errs, "stds": stds}
+            ret = {"errs": errs, "stds": stds}
     except Exception as e:
         fig.text(0.02, 0.02, "Was not able to plot GP model: {}".format(e))
         tb = traceback.format_exc()
         logger.critical(tb)
+    if pdf is not None:
+        pdf.savefig()
+        pl.close()
     return ret
 
