@@ -1,3 +1,5 @@
+import numpy as np
+import numbers
 import json
 import traceback
 import numpy as np
@@ -8,7 +10,18 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def preprocess(data):
+    if type(data) is dict:
+        return {preprocess(k): preprocess(v) for k, v in data.items()}
+    elif type(data) in [list, np.ndarray]:
+        return [preprocess(v) for v in data]
+    elif isinstance(data, numbers.Number) or data == None or type(data) == bool:
+        return data
+    else:
+        return "{}".format(data)
+
 def write_json_file(filename, data):
+    data = preprocess(data)
     try:
         f = open(filename, "w")
         json.dump(data, f)

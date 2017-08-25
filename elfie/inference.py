@@ -140,6 +140,9 @@ class PointEstimateSimulationPhase(InferencePhase):
         return sims
 
     def _run(self, inference_task, ret):
+        if self.replicates < 1:
+            logger.info("No point estimates")
+            return ret
         if "MD" in ret.keys():
             logger.info("Simulating near MD")
             ret["MD_sim"] = self._simulate_around(inference_task, ret["MD"])

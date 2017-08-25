@@ -159,6 +159,8 @@ def _compute(model, node_names, with_values_list, discname, obsnodename, new_dat
     if type(with_values_list) != list:
         logger.critical("With_values should be a list of elfi-compatible 'with_values'-dictionaries")
         assert False
+    if len(with_values_list) == 0:
+        return None
     pool_nodes = node_names
     for k in with_values_list[0].keys():
         if k not in pool_nodes:
