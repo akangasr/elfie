@@ -380,16 +380,17 @@ class BolfiInferenceTask():
 
 
     def plot_post(self, pdf, figsize):
-        if self.post is None:
-            if self.params.grid_tics is not None:
-                return self.plot_grid(pdf, figsize)
-            return
-
         bounds = list()
         names = list()
         for k in sorted(self.params.bounds.keys()):
             bounds.append(self.params.bounds[k])
             names.append(k)
+
+        if self.post is None:
+            if self.params.grid_tics is not None:
+                logger.debug("Plotting Grid")
+                multiplot(plot_grid, loc=self.MD, title="Grid", pdf=pdf, figsize=figsize, bounds=bounds, samples=self.samples, grid_tics=self.params.grid_tics, names=names)
+            return
 
         if hasattr(self, "MAP"):
             loc = self.MAP
@@ -416,44 +417,66 @@ class BolfiInferenceTask():
 
         return ret
 
-    def plot_grid(self, pdf, figsize):
-        names = list()
-        for k in sorted(self.params.bounds.keys()):
-            names.append(k)
+def find_sample(loc, samples, names):
+    for s in samples.values():
+        found = True
+        for j in range(len(loc)):
+            if abs(s["X"][names[j]] - loc[j]) > 1e-7:
+                found = False
+                break
+        if found is True:
+            return s
+    return None
 
-        ret = dict()
-        logger.debug("Plotting grid")
-        fig, ax = pl.subplots(1,1,figsize=figsize)
-        try:
-            ax.set_title("Discrepancy (grid samples)")
-            ax.set_xlabel(names[0], fontsize=20)
-            ax.set_ylabel(names[1], fontsize=20)
-            img = list()
-            for y in self.params.grid_tics[1]:
-                row = list()
-                for x in self.params.grid_tics[0]:
-                    for i in range(len(self.samples)):
-                        if self.samples[i]["X"][names[0]] == x and \
-                           self.samples[i]["X"][names[1]] == y:
-                            row.append(float(self.samples[i]["Y"]))
-                            break
-                img.append(row)
-            img_np = np.array(img)
-            mx = max(np.max(np.max(img_np)), 1e-5)
-            img_s = img_np / mx
-            im = pl.imshow(img_s, cmap='hot')
-            cbar_ax = fig.add_axes([0.91, 0.2, 0.03, 0.65]) # left, bottom, width, height
-            fig.colorbar(im, cax=cbar_ax)
-            ret = {"grid": img, "tics": self.params.grid_tics}
+def plot_grid(samples, grid_tics, bounds, names, figsize, fixed_inputs=list(), pdf=None):
+    try:
+        idx = set(range(len(bounds))) - set([f[0] for f in fixed_inputs])
+        if len(idx) == 1:
+            idx = min(idx)
+            loc = [None] * len(bounds)
+            for i, v in fixed_inputs:
+                loc[i] = v
+            x = grid_tics[idx]
+            y = list()
+            for xi in x:
+                loc[idx] = xi
+                s = find_sample(loc, samples, names)
+                y.append(float(s["Y"]))
+            fig = pl.figure(figsize=figsize)
+            pl.plot(x, y)
             pl.show()
-        except Exception as e:
-            fig.text(0.02, 0.02, "Was not able to plot grid: {}".format(e))
-            tb = traceback.format_exc()
-            logger.critical(tb)
+        elif len(idx) == 2:
+            idx1 = min(idx)
+            idx2 = max(idx)
+            loc = [None] * len(bounds)
+            for i, v in fixed_inputs:
+                loc[i] = v
+            x = grid_tics[idx1]
+            y = grid_tics[idx2]
+            img = np.empty((len(y), len(x)))
+            for i, xi in enumerate(x):
+                for j, yi in enumerate(y):
+                    loc[idx1] = xi
+                    loc[idx2] = yi
+                    s = find_sample(loc, samples, names)
+                    img[j][i] = float(s["Y"])
+            mx = float(np.max(np.max(img)))
+            mn = float(np.min(np.min(img)))
+            img_s = (img - mn) / max(mx - mn, 1e-10)
+            fig = pl.figure(figsize=figsize)
+            im = pl.imshow(img_s, cmap='hot',
+                    extent=[bounds[idx1][0], bounds[idx1][1], bounds[idx2][0], bounds[idx2][1]],
+                    aspect=(bounds[idx1][1]-bounds[idx1][0])/(bounds[idx2][1]-bounds[idx2][0]))
+            pl.show()
+        else:
+            print("dimension mismatch, bounds={}, fixed_inputs={}".format(len(bounds), fixed_inputs))
+            return
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.critical(tb)
+    if pdf is not None:
         pdf.savefig()
         pl.close()
-        return ret
-
 
 def multiplot(printer, loc, title=None, pdf=None, **kwargs):
     try:
