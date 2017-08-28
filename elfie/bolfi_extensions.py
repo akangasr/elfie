@@ -459,7 +459,7 @@ def plot_grid(samples, grid_tics, bounds, names, figsize, fixed_inputs=list(), p
                     loc[idx1] = xi
                     loc[idx2] = yi
                     s = find_sample(loc, samples, names)
-                    img[j][i] = float(s["Y"])
+                    img[len(y)-j-1][i] = float(s["Y"])
             mx = float(np.max(np.max(img)))
             mn = float(np.min(np.min(img)))
             img_s = (img - mn) / max(mx - mn, 1e-10)
@@ -533,7 +533,7 @@ def plot_1d2d(fun, bounds, n_tics, figsize, fixed_inputs=list(), pdf=None):
                 for j, yi in enumerate(y):
                     loc[idx1] = xi
                     loc[idx2] = yi
-                    img[j][i] = float(fun(loc))
+                    img[n_tics-j-1][i] = float(fun(loc))
             mx = float(np.max(np.max(img)))
             mn = float(np.min(np.min(img)))
             img_s = (img - mn) / max(mx - mn, 1e-10)
