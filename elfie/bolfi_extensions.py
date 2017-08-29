@@ -37,6 +37,7 @@ class BolfiParams():
             noise_var=0.05,
             kernel_var=0.05,
             kernel_scale=0.1,
+            kernel_prior=None,
             L=None,
             ARD=False,
             gp_params_optimizer="scg",
@@ -84,6 +85,11 @@ class BolfiFactory():
                                           variance=self.params.kernel_var,
                                           lengthscale=self.params.kernel_scale,
                                           ARD=self.params.ARD)
+        if self.params.kernel_prior is not None:
+            kernel.lengthscale.set_prior(
+                GPy.priors.Gamma.from_EV(self.params.kernel_prior["scale_E"], self.params.kernel_prior["scale_V"]), warning=False)
+            kernel.variance.set_prior(
+                GPy.priors.Gamma.from_EV(self.params.kernel_prior["var_E"], self.params.kernel_prior["var_V"]), warning=False)
         return GPyRegression(parameter_names=self.model.parameter_names,
                         bounds=self.params.bounds,
                         optimizer=self.params.gp_params_optimizer,
