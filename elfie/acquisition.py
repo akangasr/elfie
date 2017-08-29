@@ -82,10 +82,10 @@ class GPLCA(AcquisitionBase):
             pl = []
         else:
             pl = pending_locations[:]
-        if self.L_fix is None:
-            self.L = self.estimate_L(t)
-        else:
+        if self.L_fix is not None:
             self.L = self.L_fix
+        else:
+            self.L = self.estimate_L(t)
         self.M = self.estimate_M(t)
         for i in range(n_values):
             logger.info("Finding acquisition minimum..")
@@ -103,7 +103,7 @@ class GPLCA(AcquisitionBase):
         """ Estimate function maximum value """
         logger.info("Estimating M..")
         obj = lambda x: self.a.evaluate(x, t=t)  # minimization
-        loc, val = minimize(obj, self.model.bounds, random_state=self.a.random_state, maxiter=300, n_start_points=3)
+        loc, val = minimize(obj, self.model.bounds, random_state=self.a.random_state, maxiter=500, n_start_points=5)
         return -1.0 * float(val)  # maximization
 
     def estimate_L(self, t):
@@ -112,7 +112,7 @@ class GPLCA(AcquisitionBase):
         for i in range(len(self.model.bounds)):
             logger.info("Estimating L {}..".format(i))
             grad_obj = lambda x: -np.abs(float(self.a.evaluate_gradient(x, t=t)[0][i]))  # abs max
-            loc, val = minimize(grad_obj, self.model.bounds, random_state=self.a.random_state, maxiter=300, n_start_points=3)  # expensive to evaluate
+            loc, val = minimize(grad_obj, self.model.bounds, random_state=self.a.random_state, maxiter=500, n_start_points=5)  # expensive to evaluate
             L.append(abs(val))
         return L
 
