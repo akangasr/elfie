@@ -510,7 +510,7 @@ def multiplot(printer, loc, title=None, pdf=None, **kwargs):
     if pdf is not None:
         pl.close()
 
-def plot_1d2d(fun, bounds, n_tics, figsize, fixed_inputs=list(), pdf=None):
+def plot_1d2d(fun, bounds, n_tics, figsize, fixed_inputs=list(), pdf=None, cmap="hot", return_fig=False):
     try:
         idx = set(range(len(bounds))) - set([f[0] for f in fixed_inputs])
         if len(idx) == 1:
@@ -544,11 +544,13 @@ def plot_1d2d(fun, bounds, n_tics, figsize, fixed_inputs=list(), pdf=None):
             mn = float(np.min(np.min(img)))
             img_s = (img - mn) / max(mx - mn, 1e-10)
             fig = pl.figure(figsize=figsize)
-            im = pl.imshow(img_s, cmap='hot',
+            im = pl.imshow(img_s, cmap=cmap,
                     extent=[bounds[idx1][0], bounds[idx1][1], bounds[idx2][0], bounds[idx2][1]],
                     aspect=(bounds[idx1][1]-bounds[idx1][0])/(bounds[idx2][1]-bounds[idx2][0]))
             #cbar_ax = fig.add_axes([0.91, 0.2, 0.03, 0.65]) # left, bottom, width, height
             #fig.colorbar(im, cax=cbar_ax)
+            if return_fig is True:
+                return fig
             pl.show()
         else:
             print("dimension mismatch, bounds={}, fixed_inputs={}".format(len(bounds), fixed_inputs))
