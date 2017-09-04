@@ -43,6 +43,11 @@ class ExperimentGroup():
         datas = dict()
         for m in sorted(self.methods.keys()):
             for n, getter in getters.items():
+                if type(getter) == dict:
+                    if m in getter.keys():
+                        getter = getter[m]
+                    else:
+                        continue
                 if n in x_getters.keys():
                     x_getter = x_getters[n]
                 else:
@@ -50,15 +55,18 @@ class ExperimentGroup():
                 means = list()
                 stds = list()
                 x = list()
+                ns = list()
                 label = "{} {}".format(m, n).upper().strip()
                 for s in sorted(self.n_samples.keys()):
                     try:
                         mean = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, np.mean)
                         std = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, np.std)
                         xloc = self.get_filt_agg(x_getter, lambda e: e.method==m and e.n_samples==s, np.mean)
-                        x.append(xloc)
+                        n = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, sum)
                         means.append(mean)
                         stds.append(std)
+                        x.append(xloc)
+                        ns.append(n)
                     except Exception as e:
                         if verbose is True:
                             print("- skip {} s={} ({})".format(label, s, e))
@@ -67,8 +75,9 @@ class ExperimentGroup():
                     means = np.array(means)
                     stds = np.array(stds)
                     x = np.array(x)
-                    datas[label] = (means, stds, x)
+                    ns = np.array(ns)
+                    datas[label] = (means, stds, x, ns)
                     if verbose is True:
-                        print("- {} means={} stds={} x={}".format(m, means, stds, x))
+                        print("- {} means={} stds={} x={} ns={}".format(m, means, stds, x, ns))
         return datas
 
