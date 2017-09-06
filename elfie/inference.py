@@ -1,6 +1,7 @@
 import time
 import traceback
 import numpy as np
+import random
 
 from elfie.outputpool_extensions import SerializableOutputPool
 from elfie.utils import read_json_file, pretty
@@ -29,6 +30,7 @@ def inference_experiment(inference_factory,
             SamplingPhase(),
             PosteriorAnalysisPhase(types=types),
             PointEstimateSimulationPhase(replicates=replicates, region_size=region_size),
+            LikelihoodSamplesSimulationPhase(replicates=replicates),
             PlottingPhase(pdf=pdf, figsize=figsize, obs_data=obs_data, test_data=test_data, plot_data=plot_data),
             GroundTruthErrorPhase(ground_truth=ground_truth),
             PredictionErrorPhase(test_data=test_data),
@@ -86,12 +88,21 @@ class PosteriorAnalysisPhase(InferencePhase):
         InferencePhase.__init__(self, name, requirements)
 
     def _run(self, inference_task, ret):
-        if "MED" in self.types or "ML" in self.types or "MAP" in self.types:
+        if "MED" in self.types or "ML" in self.types or "MAP" in self.types or "LIK" in self.types:
             post_start = time.time()
             inference_task.compute_posterior()
             inference_task.compute_MED()
             inference_task.compute_ML()
             inference_task.compute_MAP()
+            if "LIK" in self.types:
+                try:
+                    inference_task.sample_from_likelihood()
+                    ret["lik_samples"] = inference_task.lik_samples
+                    ret["acc_prop"] = inference_task.acc_prop
+                    ret["LM"] = inference_task.LM
+                except Exception as e:
+                    tb = traceback.format_exc()
+                    logger.critical(tb)
             post_end = time.time()
             ret["post_duration"] = post_end - post_start
             ret["threshold"] = inference_task.threshold
@@ -155,6 +166,34 @@ class PointEstimateSimulationPhase(InferencePhase):
         if "MAP" in ret.keys():
             logger.info("Simulating near MAP")
             ret["MAP_sim"] = self._simulate_around(inference_task, ret["MAP"])
+        if "LM" in ret.keys():
+            logger.info("Simulating near LM")
+            ret["LM_sim"] = self._simulate_around(inference_task, ret["LM"])
+        return ret
+
+class LikelihoodSamplesSimulationPhase(InferencePhase):
+
+    def __init__(self, name="Likelihood samples simulation", requirements=["lik_samples"], replicates=10):
+        InferencePhase.__init__(self, name, requirements)
+        self.replicates = replicates
+
+    def _run(self, inference_task, ret):
+        if self.replicates < 1:
+            logger.info("No simulations")
+            return ret
+        nodes = [inference_task.obsnodename, inference_task.discname]
+        bounds = inference_task.params.bounds
+        wv_dicts = list()
+        for sample in random.sample(ret["lik_samples"], self.replicates):
+            wv = dict()
+            for val, name in zip(sample, inference_task.paramnames):
+                wv[name] = val
+            wv_dicts.append(wv)
+        logger.info("Simulating at: {}".format(wv_dicts))
+        sims = inference_task.compute_from_model(nodes, wv_dicts)
+        for i in range(len(sims)):
+            sims[i]["_at"] = wv_dicts[i]
+        ret["lik_sim"] = sims
         return ret
 
 
@@ -192,6 +231,10 @@ class PlottingPhase(InferencePhase):
                     self._plot_datas(inference_task, ret["ML_sim"], "ML")
                 if "MAP_sim" in ret.keys():
                     self._plot_datas(inference_task, ret["MAP_sim"], "MAP")
+                if "LM_sim" in ret.keys():
+                    self._plot_datas(inference_task, ret["LM_sim"], "LM")
+                if "lik_sim" in ret.keys():
+                    self._plot_datas(inference_task, ret["lik_sim"], "Likelihood samples")
                 if self.obs_data is not None:
                     logger.info("Plotting observation data")
                     self.plot_data(self.pdf, self.figsize, self.obs_data, "Observation data")
@@ -219,6 +262,8 @@ class GroundTruthErrorPhase(InferencePhase):
                 ret["ML_gt_err"] = rmse(ret["ML"], self.ground_truth)
             if "MAP" in ret.keys():
                 ret["MAP_gt_err"] = rmse(ret["MAP"], self.ground_truth)
+            if "LM" in ret.keys():
+                ret["LM_gt_err"] = rmse(ret["LM"], self.ground_truth)
         else:
             logger.info("Pass, no ground truth parameters.")
         return ret
@@ -249,6 +294,12 @@ class PredictionErrorPhase(InferencePhase):
             if "MAP_sim" in ret.keys():
                 logger.info("Estimating MAP prediction error")
                 ret["MAP_errs"] = self._compute_errors(inference_task, ret["MAP_sim"])
+            if "LM_sim" in ret.keys():
+                logger.info("Estimating LM prediction error")
+                ret["LM_errs"] = self._compute_errors(inference_task, ret["LM_sim"])
+            if "lik_sim" in ret.keys():
+                logger.info("Estimating Likelihood samples prediction error")
+                ret["lik_errs"] = self._compute_errors(inference_task, ret["lik_sim"])
         else:
             logger.info("Pass, no test data.")
         return ret

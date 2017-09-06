@@ -43,6 +43,8 @@ class BolfiParams():
             gp_params_optimizer="scg",
             gp_params_max_opt_iters=50,
             gp_params_update_interval=0,
+            noisy_posterior=False,
+            model_scale=1.0,
             abc_threshold_delta=0,
             acq_delta=0.1,
             acq_noise_cov=0.1,
@@ -348,6 +350,16 @@ class BolfiInferenceTask():
         self.threshold = minval + self.params.abc_threshold_delta
         self.post = self.bolfi.extract_posterior(threshold=self.threshold)
 
+    def sample_from_likelihood(self):
+        logger.info("MCMC sampling..")
+        if self.params.noisy_posterior:
+            fun = lambda x: self.params.model_scale * self.post.model._gp.posterior_samples(np.array(x), size=1, full_cov=True)
+        else:
+            fun = self.post._unnormalized_loglikelihood
+        self.lik_samples, self.acc_prop = MCMC_sample(fun, self.post.model.bounds, [-0.5, -0.5], noisy=self.params.noisy_posterior)
+        logger.info("Acceptance probability {:.4f}".format(self.acc_prop))
+        self.LM = {k: v for k, v in zip(self.paramnames, np.mean(self.lik_samples, axis=0))}
+
     def compute_MED(self):
         """ Computes minimum expected discrepancy sample """
         self.MED = dict()
@@ -398,7 +410,9 @@ class BolfiInferenceTask():
                 multiplot(plot_grid, loc=self.MD, title="Grid", pdf=pdf, figsize=figsize, bounds=bounds, samples=self.samples, grid_tics=self.params.grid_tics, names=names)
             return
 
-        if hasattr(self, "MAP"):
+        if hasattr(self, "LM"):
+            loc = self.LM
+        elif hasattr(self, "MAP"):
             loc = self.MAP
         elif hasattr(self, "ML"):
             loc = self.ML
@@ -420,6 +434,29 @@ class BolfiInferenceTask():
             n_tics = 150
             logger.debug("Plotting {}".format(fname))
             multiplot(plot_1d2d, loc, title=fname, pdf=pdf, figsize=figsize, fun=fun, bounds=bounds, n_tics=n_tics)
+
+
+        if hasattr(self, "LM"):
+            try:
+                if self.params.noisy_posterior:
+                    fun1 = lambda x: self.params.model_scale * float(self.post.model.predict(x)[0])
+                    fun2 = do_KDE(self.lik_samples, mirror=0.05, bw=0.1)
+                else:
+                    fun1 = self.post._unnormalized_loglikelihood
+                    fun2 = self.post._unnormalized_likelihood
+                logger.debug("Plotting Unnormalized log-likelihood")
+                plot_2d_gridworld_likelihood(fun1, self.post.model.bounds, figsize, n_tics=n_tics, title="Unnormalized log-likelihood and samples", samples=self.lik_samples)
+                if pdf is not None:
+                    pdf.savefig()
+                    pl.close()
+                logger.debug("Plotting Unnormalized likelihood")
+                plot_2d_gridworld_likelihood(fun2, self.post.model.bounds, figsize, n_tics=n_tics, title="Unnormalized likelihood", samples=self.lik_samples, plotsamples=False)
+                if pdf is not None:
+                    pdf.savefig()
+                    pl.close()
+            except Exception as e:
+                tb = traceback.format_exc()
+                logger.critical(tb)
 
         return ret
 
@@ -602,4 +639,86 @@ def plot_residuals(samples, gp, figsize, pdf=None):
         pdf.savefig()
         pl.close()
     return ret
+
+
+def MCMC_sample(logl, bounds, init, noisy=False, n_samples=10000, burnout=1000, thinning=5, propstd=0.1):
+    loc1 = init
+    if noisy is False:
+        logl1 = logl(loc1)
+    samples = list()
+    prop = lambda : np.random.normal(loc=[0.0]*len(bounds), scale=[propstd]*len(bounds))
+    n_acc = 0
+    n_rej = 0
+    for i in range(burnout + n_samples*thinning):
+        while True:
+            loc2 = loc1 + prop()
+            if not out_of_bounds(loc2, bounds):
+                break
+        if noisy is True:
+            logl1, logl2 = logl([loc1, loc2])  # draw from posterior
+            ratio = min(1, np.exp(logl2 - logl1))
+        else:
+            logl2 = logl(loc2)
+            ratio = min(1, np.exp(logl2 - logl1))
+        if ratio > np.random.uniform():
+            n_acc += 1
+            loc1 = loc2
+            if noisy is False:
+                logl1 = logl2
+        else:
+            n_rej += 1
+        if i >= burnout and i % thinning == 0:
+            samples.append(loc1)
+    return samples, float(n_acc)/(n_acc+n_rej)
+
+def out_of_bounds(loc, bounds):
+    for v, b in zip(loc, bounds):
+        if v < b[0] or v > b[1]:
+            return True
+    return False
+
+def plot_2d_gridworld_likelihood(fun, bounds, figsize, n_tics, ML=None, title="", samples=list(), plotsamples=True):
+    plot_1d2d(fun, bounds, n_tics, figsize, cmap="hot", return_fig=True)
+    pl.xlabel("Feature 1")
+    pl.ylabel("Feature 2")
+    pl.title(title)
+    if plotsamples is True and len(samples) > 0:
+        pl.scatter([s[0] for s in samples], [s[1] for s in samples], alpha=0.25,
+                   color="black", marker=",", s=1, label="Samples")
+    if len(samples) > 1:
+        pl.scatter(*np.mean(samples, axis=0), color="green", marker="s", s=80,
+                   label="Sample mean", edgecolor="black", linewidth="1")
+    if ML is not None:
+        pl.scatter(ML["p00_feature1_value"], ML["p01_feature2_value"], color="green", marker="D", s=80,
+                   label="ML", edgecolor="black", linewidth="1")
+    pl.scatter(-0.33, -0.67, color="black", edgecolor="white", linewidth="1",
+               marker="*", s=200, label="Ground truth")
+    pl.xlim(-1,0)
+    pl.ylim(-1,0)
+    pl.gca().legend(loc='upper center', bbox_to_anchor=(1.3, 0.5), ncol=1, scatterpoints=1)
+    pl.show()
+
+def do_KDE(samples, mirror=0.1, bw="scott"):
+    mirrored_samples = list()
+    for sample in samples:
+        # assume box [-1,0]x[-1,0]
+        mirrored_samples.append([sample[0], sample[1]])
+        if sample[0] < mirror:
+            mirrored_samples.append([-sample[0], sample[1]])
+            if sample[1] < mirror:
+                mirrored_samples.append([-sample[0], -sample[1]])
+            if sample[1] > 1-mirror:
+                mirrored_samples.append([-sample[0], -2+sample[1]])
+        if sample[0] > 1-mirror:
+            mirrored_samples.append([-2+sample[0], sample[1]])
+            if sample[1] < mirror:
+                mirrored_samples.append([-2+sample[0], -sample[1]])
+            if sample[1] > 1-mirror:
+                mirrored_samples.append([-2+sample[0], -2+sample[1]])
+        if sample[1] < mirror:
+            mirrored_samples.append([sample[0], -sample[1]])
+        if sample[1] > 1-mirror:
+            mirrored_samples.append([sample[0], -2+sample[1]])
+    return sp.stats.gaussian_kde(np.array(mirrored_samples).T, bw_method=bw)
+
 
