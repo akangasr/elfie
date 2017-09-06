@@ -89,9 +89,9 @@ class BolfiFactory():
                                           ARD=self.params.ARD)
         if self.params.kernel_prior is not None:
             kernel.lengthscale.set_prior(
-                GPy.priors.Gamma.from_EV(self.params.kernel_prior["scale_E"], self.params.kernel_prior["scale_V"]), warning=False)
+                GPy.priors.Gamma.from_EV(self.params.kernel_prior["scale_E"], self.params.kernel_prior["var_E"]), warning=False)
             kernel.variance.set_prior(
-                GPy.priors.Gamma.from_EV(self.params.kernel_prior["var_E"], self.params.kernel_prior["var_V"]), warning=False)
+                GPy.priors.Gamma.from_EV(self.params.kernel_prior["scale_V"], self.params.kernel_prior["var_V"]), warning=False)
         return GPyRegression(parameter_names=self.model.parameter_names,
                         bounds=self.params.bounds,
                         optimizer=self.params.gp_params_optimizer,
