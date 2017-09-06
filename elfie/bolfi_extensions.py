@@ -222,6 +222,10 @@ class BolfiInferenceTask():
             self._optimize()
             return
         self.bolfi.infer(self.params.n_samples)
+        try:
+            self.kernel_params = {p.name: p.values.tolist() for p in self.bolfi.target_model._gp.kern.parameters}
+        except Exception as e:
+            self.kernel_params = None
         self.samples = dict()
         self.MD = dict()
         self.MD_val = None

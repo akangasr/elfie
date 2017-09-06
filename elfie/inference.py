@@ -78,6 +78,8 @@ class SamplingPhase(InferencePhase):
             ret["sample_pool"] = inference_task.pool.to_dict()
         ret["samples"] = inference_task.samples
         ret["n_samples"] = len(inference_task.samples)
+        if hasattr(inference_task, "kernel_params"):
+            ret["kernel_params"] = inference_task.kernel_params
         return ret
 
 
