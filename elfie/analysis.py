@@ -62,7 +62,7 @@ class ExperimentGroup():
                         mean = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, np.mean)
                         std = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, np.std)
                         xloc = self.get_filt_agg(x_getter, lambda e: e.method==m and e.n_samples==s, np.mean)
-                        n = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, sum)
+                        n = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, len)
                         means.append(mean)
                         stds.append(std)
                         x.append(xloc)
