@@ -360,7 +360,7 @@ class BolfiInferenceTask():
             fun = lambda x: self.params.model_scale * self.post.model._gp.posterior_samples(np.array(x), size=1, full_cov=True)
         else:
             fun = self.post._unnormalized_loglikelihood
-        self.lik_samples, self.acc_prop = MCMC_sample(fun, self.post.model.bounds, [-0.5, -0.5], noisy=self.params.noisy_posterior)
+        self.lik_samples, self.acc_prop = MCMC_sample(fun, self.post.model.bounds, [0.5*(b[1]+b[0]) for b in self.post.model.bounds], noisy=self.params.noisy_posterior)
         logger.info("Acceptance probability {:.4f}".format(self.acc_prop))
         self.LM = {k: v for k, v in zip(self.paramnames, np.mean(self.lik_samples, axis=0))}
 
@@ -440,11 +440,12 @@ class BolfiInferenceTask():
             multiplot(plot_1d2d, loc, title=fname, pdf=pdf, figsize=figsize, fun=fun, bounds=bounds, n_tics=n_tics)
 
 
-        if hasattr(self, "LM"):
+        if len(bounds) == 2 and hasattr(self, "LM"):
+            # TODO: plot slices?
             try:
                 if self.params.noisy_posterior:
                     fun1 = lambda x: self.params.model_scale * float(self.post.model.predict(x)[0])
-                    fun2 = do_KDE(self.lik_samples, mirror=0.05, bw=0.1)
+                    fun2 = sp.stats.gaussian_kde(np.array(self.lik_samples).T, bw_method=0.1)
                 else:
                     fun1 = self.post._unnormalized_loglikelihood
                     fun2 = self.post._unnormalized_likelihood
@@ -701,28 +702,4 @@ def plot_2d_gridworld_likelihood(fun, bounds, figsize, n_tics, ML=None, title=""
     pl.ylim(-1,0)
     pl.gca().legend(loc='upper center', bbox_to_anchor=(1.3, 0.5), ncol=1, scatterpoints=1)
     pl.show()
-
-def do_KDE(samples, mirror=0.1, bw="scott"):
-    mirrored_samples = list()
-    for sample in samples:
-        # assume box [-1,0]x[-1,0]
-        mirrored_samples.append([sample[0], sample[1]])
-        if sample[0] < mirror:
-            mirrored_samples.append([-sample[0], sample[1]])
-            if sample[1] < mirror:
-                mirrored_samples.append([-sample[0], -sample[1]])
-            if sample[1] > 1-mirror:
-                mirrored_samples.append([-sample[0], -2+sample[1]])
-        if sample[0] > 1-mirror:
-            mirrored_samples.append([-2+sample[0], sample[1]])
-            if sample[1] < mirror:
-                mirrored_samples.append([-2+sample[0], -sample[1]])
-            if sample[1] > 1-mirror:
-                mirrored_samples.append([-2+sample[0], -2+sample[1]])
-        if sample[1] < mirror:
-            mirrored_samples.append([sample[0], -sample[1]])
-        if sample[1] > 1-mirror:
-            mirrored_samples.append([sample[0], -2+sample[1]])
-    return sp.stats.gaussian_kde(np.array(mirrored_samples).T, bw_method=bw)
-
 
