@@ -50,7 +50,7 @@ class InferencePhase():
         for k in self.req:
             if ret is None or k not in ret.keys():
                 logger.warning("Can not run {} phase as {} does not exist!".format(self.name, k))
-                return
+                return ret
         try:
             logger.info("Running {} phase".format(self.name))
             return self._run(inference_task, ret)
