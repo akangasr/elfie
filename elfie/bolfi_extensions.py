@@ -224,6 +224,7 @@ class BolfiInferenceTask():
         self.bolfi.infer(self.params.n_samples)
         try:
             self.kernel_params = {p.name: p.values.tolist() for p in self.bolfi.target_model._gp.kern.parameters}
+            self.kernel_params["noise_variance"] = float(self.bolfi.target_model._gp.Gaussian_noise.variance)
         except Exception as e:
             self.kernel_params = None
         self.samples = dict()
