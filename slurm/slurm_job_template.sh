@@ -2,6 +2,7 @@
 #SBATCH -n _NPROC_
 #SBATCH --time=_TIME_
 #SBATCH --mem-per-cpu=_MEM_
+#SBATCH --constraint=[opt|ivb|hsw]
 #SBATCH -p batch
 #SBATCH -o _OUT_FILE_
 #SBATCH -e _ERR_FILE_
