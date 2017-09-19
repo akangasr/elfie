@@ -274,14 +274,13 @@ class BolfiInferenceTask():
             def __call__(self, x):
                 if self.calls < 1:
                     raise ValueError("No calls left")
-                for xi, bi in zip(x, self.bd):
-                    if xi < bi[0] or xi > bi[1]:
-                        logger.warning("Tried to sample outside bounds, returning large discrepancy")
-                        ret = 1e10
-                        break
-                self.calls -= 1
                 wv = {p: v for p, v in zip(self.pn, x)}
                 logger.info("Evaluating at {}, {} calls left".format(wv, self.calls))
+                for xi, bi in zip(x, self.bd):
+                    if xi < bi[0] or xi > bi[1]:
+                        logger.info("Outside bounds, returning large discrepancy")
+                        return 1e10
+                self.calls -= 1
                 ret = _compute(self.md, [self.dn], [wv], self.dn, self.on)
                 logger.info("Result: {}".format(ret))
                 ret = float(ret[0][self.dn][0])
@@ -302,16 +301,21 @@ class BolfiInferenceTask():
         vals = list()
         samples = list()
         while target.calls > 0:
+            logger.info("Optimization starting, {} function calls left".format(target.calls))
+            x0 = [np.random.uniform(*b) for b in bounds]  # TODO: randomstate?
             if self.opt == "lbfgsb":
                 method = "L-BFGS-B"
                 options = {"eps": 1e-3}
+                logger.info("x0 {}".format(x0))
             if self.opt == "neldermead":
                 method = "Nelder-Mead"
-                options = {}
-            x0 = [np.random.uniform(*b) for b in bounds]  # TODO: randomstate?
-            print("x0", x0)
-            print("bounds", bounds)
-            logger.info("Optimization ({}) started from {}, {} function calls left".format(method, x0, target.calls))
+                initial_simplex = np.array([[np.random.uniform(*b) for b in bounds] for i in range(len(bounds)+1)])  # TODO: randomstate?
+                logger.info("initial simplex: {}".format(initial_simplex))
+                options = {"xatol": 0.005,
+                           "fatol": 0.005,
+                           "initial_simplex": initial_simplex,
+                           "disp": True}
+                logger.info("method: {}, bounds: {}".format(method, bounds))
             try:
                 r = sp.optimize.minimize(fun=target,
                                          x0=x0,
