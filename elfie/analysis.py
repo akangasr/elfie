@@ -48,23 +48,29 @@ class ExperimentGroup():
                         getter = getter[m]
                     else:
                         continue
-                if n in x_getters.keys():
-                    x_getter = x_getters[n]
+                label = "{} {}".format(m, n).upper().strip()
+                if label in x_getters.keys():
+                    x_getter = x_getters[label]
                 else:
                     x_getter = x_getters[""]
                 means = list()
                 stds = list()
+                p05s = list()
+                p95s = list()
                 x = list()
                 ns = list()
-                label = "{} {}".format(m, n).upper().strip()
                 for s in sorted(self.n_samples.keys()):
                     try:
                         mean = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, np.mean)
                         std = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, np.std)
+                        p05 = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, lambda x: np.percentile(x, 5))
+                        p95 = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, lambda x: np.percentile(x, 95))
                         xloc = self.get_filt_agg(x_getter, lambda e: e.method==m and e.n_samples==s, np.mean)
                         n = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, len)
                         means.append(mean)
                         stds.append(std)
+                        p05s.append(p05)
+                        p95s.append(p95)
                         x.append(xloc)
                         ns.append(n)
                     except Exception as e:
@@ -74,9 +80,11 @@ class ExperimentGroup():
                 if len(means) > 0:
                     means = np.array(means)
                     stds = np.array(stds)
+                    p05s = np.array(p05s)
+                    p95s = np.array(p95s)
                     x = np.array(x)
                     ns = np.array(ns)
-                    datas[label] = (means, stds, x, ns)
+                    datas[label] = (means, stds, x, p05s, p95s, ns)
                     if verbose is True:
                         print("- {} means={} stds={} x={} ns={}".format(m, means, stds, x, ns))
         return datas
