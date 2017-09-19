@@ -31,6 +31,7 @@ def inference_experiment(inference_factory,
             PosteriorAnalysisPhase(types=types),
             PointEstimateSimulationPhase(replicates=replicates, region_size=region_size),
             LikelihoodSamplesSimulationPhase(replicates=replicates),
+            PosteriorSamplesSimulationPhase(replicates=replicates),
             PlottingPhase(pdf=pdf, figsize=figsize, obs_data=obs_data, test_data=test_data, plot_data=plot_data),
             GroundTruthErrorPhase(ground_truth=ground_truth),
             PredictionErrorPhase(test_data=test_data),
@@ -96,18 +97,33 @@ class PosteriorAnalysisPhase(InferencePhase):
             inference_task.compute_MED()
             inference_task.compute_ML()
             inference_task.compute_MAP()
-            if "LIK" in self.types:
-                try:
-                    inference_task.sample_from_likelihood()
-                    ret["lik_samples"] = inference_task.lik_samples
-                    ret["acc_prop"] = inference_task.acc_prop
-                    ret["LM"] = inference_task.LM
-                except Exception as e:
-                    tb = traceback.format_exc()
-                    logger.critical(tb)
             post_end = time.time()
             ret["post_duration"] = post_end - post_start
             ret["threshold"] = inference_task.threshold
+            if "LIK" in self.types:
+                try:
+                    lik_s_start = time.time()
+                    inference_task.sample_from_likelihood()
+                    ret["lik_samples"] = inference_task.lik_samples
+                    ret["lik_acc_prop"] = inference_task.lik_acc_prop
+                    ret["LM"] = inference_task.LM
+                    lik_s_end = time.time()
+                    ret["lik_sampling_duration"] = lik_s_end - lik_s_start
+                except Exception as e:
+                    tb = traceback.format_exc()
+                    logger.critical(tb)
+            if "POST" in self.types:
+                try:
+                    post_s_start = time.time()
+                    inference_task.sample_from_posterior()
+                    ret["post_samples"] = inference_task.post_samples
+                    ret["post_acc_prop"] = inference_task.post_acc_prop
+                    ret["PM"] = inference_task.PM
+                    post_s_end = time.time()
+                    ret["post_sampling_duration"] = post_s_end - post_s_start
+                except Exception as e:
+                    tb = traceback.format_exc()
+                    logger.critical(tb)
             #ret["post"] = inference_task.post.to_dict()  # TODO
         if "MD" in self.types:
             ret["MD"] = inference_task.MD
@@ -171,6 +187,9 @@ class PointEstimateSimulationPhase(InferencePhase):
         if "LM" in ret.keys():
             logger.info("Simulating near LM")
             ret["LM_sim"] = self._simulate_around(inference_task, ret["LM"])
+        if "PM" in ret.keys():
+            logger.info("Simulating near PM")
+            ret["PM_sim"] = self._simulate_around(inference_task, ret["PM"])
         return ret
 
 class LikelihoodSamplesSimulationPhase(InferencePhase):
@@ -198,6 +217,30 @@ class LikelihoodSamplesSimulationPhase(InferencePhase):
         ret["lik_sim"] = sims
         return ret
 
+class PosteriorSamplesSimulationPhase(InferencePhase):
+
+    def __init__(self, name="Posterior samples simulation", requirements=["post_samples"], replicates=10):
+        InferencePhase.__init__(self, name, requirements)
+        self.replicates = replicates
+
+    def _run(self, inference_task, ret):
+        if self.replicates < 1:
+            logger.info("No simulations")
+            return ret
+        nodes = [inference_task.obsnodename, inference_task.discname]
+        bounds = inference_task.params.bounds
+        wv_dicts = list()
+        for sample in random.sample(ret["post_samples"], self.replicates):
+            wv = dict()
+            for val, name in zip(sample, inference_task.paramnames):
+                wv[name] = val
+            wv_dicts.append(wv)
+        logger.info("Simulating at: {}".format(wv_dicts))
+        sims = inference_task.compute_from_model(nodes, wv_dicts)
+        for i in range(len(sims)):
+            sims[i]["_at"] = wv_dicts[i]
+        ret["post_sim"] = sims
+        return ret
 
 class PlottingPhase(InferencePhase):
 
@@ -237,6 +280,10 @@ class PlottingPhase(InferencePhase):
                     self._plot_datas(inference_task, ret["LM_sim"], "LM")
                 if "lik_sim" in ret.keys():
                     self._plot_datas(inference_task, ret["lik_sim"], "Likelihood samples")
+                if "PM_sim" in ret.keys():
+                    self._plot_datas(inference_task, ret["PM_sim"], "PM")
+                if "post_sim" in ret.keys():
+                    self._plot_datas(inference_task, ret["post_sim"], "Posterior samples")
                 if self.obs_data is not None:
                     logger.info("Plotting observation data")
                     self.plot_data(self.pdf, self.figsize, self.obs_data, "Observation data")
@@ -266,6 +313,8 @@ class GroundTruthErrorPhase(InferencePhase):
                 ret["MAP_gt_err"] = rmse(ret["MAP"], self.ground_truth)
             if "LM" in ret.keys():
                 ret["LM_gt_err"] = rmse(ret["LM"], self.ground_truth)
+            if "PM" in ret.keys():
+                ret["PM_gt_err"] = rmse(ret["PM"], self.ground_truth)
         else:
             logger.info("Pass, no ground truth parameters.")
         return ret
@@ -302,6 +351,12 @@ class PredictionErrorPhase(InferencePhase):
             if "lik_sim" in ret.keys():
                 logger.info("Estimating Likelihood samples prediction error")
                 ret["lik_errs"] = self._compute_errors(inference_task, ret["lik_sim"])
+            if "PM_sim" in ret.keys():
+                logger.info("Estimating PM prediction error")
+                ret["PM_errs"] = self._compute_errors(inference_task, ret["PM_sim"])
+            if "post_sim" in ret.keys():
+                logger.info("Estimating Posterior samples prediction error")
+                ret["post_errs"] = self._compute_errors(inference_task, ret["post_sim"])
         else:
             logger.info("Pass, no test data.")
         return ret

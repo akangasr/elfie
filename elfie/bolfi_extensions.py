@@ -401,14 +401,25 @@ class BolfiInferenceTask():
         self.post = self.bolfi.extract_posterior(threshold=self.threshold)
 
     def sample_from_likelihood(self):
-        logger.info("MCMC sampling..")
+        logger.info("MCMC sampling likelihood..")
         if self.params.noisy_posterior:
             fun = lambda x: self.params.model_scale * self.post.model._gp.posterior_samples(np.array(x), size=1, full_cov=True)
         else:
             fun = self.post._unnormalized_loglikelihood
-        self.lik_samples, self.acc_prop = MCMC_sample(fun, self.post.model.bounds, [0.5*(b[1]+b[0]) for b in self.post.model.bounds], noisy=self.params.noisy_posterior)
-        logger.info("Acceptance probability {:.4f}".format(self.acc_prop))
+        self.lik_samples, self.lik_acc_prop = MCMC_sample(fun, self.post.model.bounds, [0.5*(b[1]+b[0]) for b in self.post.model.bounds], noisy=self.params.noisy_posterior)
+        logger.info("Acceptance probability {:.4f}".format(self.lik_acc_prop))
         self.LM = {k: v for k, v in zip(self.paramnames, np.mean(self.lik_samples, axis=0))}
+
+    def sample_from_posterior(self):
+        logger.info("MCMC sampling posterior..")
+        if self.params.noisy_posterior:
+            print("Posterior sampling for noisy posterior not implemented")
+            raise NotImplementedError()
+        else:
+            fun = self.post.logpdf
+        self.post_samples, self.post_acc_prop = MCMC_sample(fun, self.post.model.bounds, [0.5*(b[1]+b[0]) for b in self.post.model.bounds], noisy=self.params.noisy_posterior)
+        logger.info("Acceptance probability {:.4f}".format(self.post_acc_prop))
+        self.PM = {k: v for k, v in zip(self.paramnames, np.mean(self.post_samples, axis=0))}
 
     def compute_MED(self):
         """ Computes minimum expected discrepancy sample """
@@ -692,7 +703,7 @@ def plot_residuals(samples, gp, figsize, pdf=None):
     return ret
 
 
-def MCMC_sample(logl, bounds, init, noisy=False, n_samples=10000, burnout=1000, thinning=5, propstd=0.1):
+def MCMC_sample(logl, bounds, init, noisy=False, n_samples=20000, burnout=1000, thinning=10, propstd=0.1):
     loc1 = init
     if noisy is False:
         logl1 = logl(loc1)
