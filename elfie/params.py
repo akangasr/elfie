@@ -8,6 +8,9 @@ def uniform_prior(minv, maxv, name, **kwargs):
 def truncnorm_prior(minv, maxv, mean, std, name, **kwargs):
     return elfi.Prior("truncnorm", (minv - mean)/std, (maxv - mean)/std, mean, std, name=name)
 
+def beta_prior(a, b, name, **kwargs):
+    return elfi.Prior("beta", a, b, name=name)
+
 def constant_prior(val, name, **kwargs):
     return elfi.Constant(val, name=name)
 
@@ -17,6 +20,7 @@ class ModelParams():
     priors = {
         "uniform": uniform_prior,
         "truncnorm": truncnorm_prior,
+        "beta": beta_prior,
         "constant": constant_prior,
         }
 
