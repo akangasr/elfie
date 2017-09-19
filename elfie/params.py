@@ -53,7 +53,6 @@ class ModelParams():
                 maxv = p["maxv"] - (delta - d)
                 tics = np.linspace(minv, maxv, p["ntics"]).tolist()
                 ret.append(tics)
-        print("TICS", ret)
         return ret
 
     def get_L(self):

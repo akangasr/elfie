@@ -102,9 +102,9 @@ class BolfiFactory():
     def _acquisition(self, gp):
         if self.params.sampling_type == "uniform":
             return UniformAcquisition(model=gp)
-        if self.params.sampling_type == "grid":
-            return GridAcquisition(tics=self.params.grid_tics,
-                                   model=gp)
+#        if self.params.sampling_type == "grid":
+#            return GridAcquisition(tics=self.params.grid_tics,
+#                                   model=gp)
         if self.params.sampling_type == "bo":
             return GPLCA(LCBSC(delta=self.params.acq_delta,
                                max_opt_iters=self.params.acq_opt_iterations,
@@ -117,6 +117,17 @@ class BolfiFactory():
     def get(self):
         """ Returns new BolfiExperiment object
         """
+        if self.params.sampling_type in ["grid"]:
+            return BolfiInferenceTask(None,
+                                      self.model,
+                                      copy.copy(self.params),
+                                      None,
+                                      self.model.parameter_names,
+                                      self.params.simulator_node_name,
+                                      self.params.observed_node_name,
+                                      self.params.discrepancy_node_name,
+                                      None,
+                                      self.params.grid_tics)
         if self.params.sampling_type in ["lbfgsb", "neldermead"]:
             return BolfiInferenceTask(None,
                                       self.model,
@@ -199,7 +210,7 @@ def _compute(model, node_names, with_values_list, discname, obsnodename, new_dat
 
 
 class BolfiInferenceTask():
-    def __init__(self, bolfi, model, params, pool, paramnames, simuname, obsnodename, discname, opt=None):
+    def __init__(self, bolfi, model, params, pool, paramnames, simuname, obsnodename, discname, opt=None, grid=None):
         self.bolfi = bolfi
         self.model = model
         self.params = params
@@ -215,11 +226,15 @@ class BolfiInferenceTask():
         self.obsnodename = obsnodename
         self.discname = discname
         self.opt = opt
+        self.grid = grid
 
     def do_sampling(self):
         """ Computes BO samples """
         if self.opt is not None:
             self._optimize()
+            return
+        if self.grid is not None:
+            self._grid_search()
             return
         self.bolfi.infer(self.params.n_samples)
         try:
@@ -334,6 +349,32 @@ class BolfiInferenceTask():
                 self.MD = loc
                 self.MD_val = val
         logger.info("MD sample at {}, value {}".format(self.MD, self.MD_val))
+
+    def _grid_search(self):
+        logger.info("Starting grid search")
+        logger.info("Grid: {}".format(self.grid))
+        self.MD = dict()
+        self.MD_val = None
+        self.samples = dict()
+        wvs = list()
+        for idx in range(int(self.params.n_samples)):
+            loc = list()
+            for j, tics in enumerate(self.grid):
+                l = len(tics)
+                mod = idx % l
+                idx = int(idx / l)
+                loc.append(tics[mod])
+            wvs.append({p: v for p, v in zip(self.paramnames, loc)})
+        ret = _compute(self.model, [self.discname], wvs, self.discname, self.obsnodename)
+        for result, loc in zip(ret, wvs):
+            val = float(result[self.discname][0])
+            self.samples[idx] = {"X": loc, "Y": val}
+            logger.info("Observed {} at {}".format(val, loc))
+            if self.MD_val is None or val < self.MD_val:
+                self.MD = loc
+                self.MD_val = val
+        logger.info("MD sample at {}, value {}".format(self.MD, self.MD_val))
+
 
     def compute_from_model(self, node_names, with_values_list, new_data=None):
         return _compute(self.model, node_names, with_values_list, self.discname, self.obsnodename, new_data=None)
