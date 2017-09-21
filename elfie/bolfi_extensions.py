@@ -370,6 +370,7 @@ class BolfiInferenceTask():
                 loc.append(tics[mod])
             wvs.append({p: v for p, v in zip(self.paramnames, loc)})
         ret = _compute(self.model, [self.discname], wvs, self.discname, self.obsnodename)
+        idx = 0
         for result, loc in zip(ret, wvs):
             val = float(result[self.discname][0])
             self.samples[idx] = {"X": loc, "Y": val}
@@ -377,6 +378,7 @@ class BolfiInferenceTask():
             if self.MD_val is None or val < self.MD_val:
                 self.MD = loc
                 self.MD_val = val
+            idx += 1
         logger.info("MD sample at {}, value {}".format(self.MD, self.MD_val))
 
 
