@@ -3,11 +3,13 @@ import scipy as sp
 import json
 
 class ExperimentLog():
-    def __init__(self, filename, method, samples):
+    def __init__(self, filename, method, samples, exclude=[]):
         self.method = method
         with open(filename) as f:
             full_log = json.load(f)
         for k, v in full_log.items():
+            if k in exclude:
+                continue
             setattr(self, k, v)
 
     def debug_print(self):
@@ -63,8 +65,8 @@ class ExperimentGroup():
                     try:
                         mean = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, np.mean)
                         std = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, np.std)
-                        p05 = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, lambda x: np.percentile(x, 5))
-                        p95 = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, lambda x: np.percentile(x, 95))
+                        p05 = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, lambda x: np.percentile(x, 25))
+                        p95 = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, lambda x: np.percentile(x, 75))
                         xloc = self.get_filt_agg(x_getter, lambda e: e.method==m and e.n_samples==s, np.mean)
                         n = self.get_filt_agg(getter, lambda e: e.method==m and e.n_samples==s, len)
                         means.append(mean)

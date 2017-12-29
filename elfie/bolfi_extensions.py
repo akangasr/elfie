@@ -87,17 +87,21 @@ class BolfiFactory():
                                           variance=self.params.kernel_var,
                                           lengthscale=self.params.kernel_scale,
                                           ARD=self.params.ARD)
+        noise_prior = None
         if self.params.kernel_prior is not None:
             kernel.lengthscale.set_prior(
-                GPy.priors.Gamma.from_EV(self.params.kernel_prior["scale_E"], self.params.kernel_prior["var_E"]), warning=False)
+                GPy.priors.Gamma.from_EV(self.params.kernel_prior["scale_E"], self.params.kernel_prior["scale_V"]), warning=False)
             kernel.variance.set_prior(
-                GPy.priors.Gamma.from_EV(self.params.kernel_prior["scale_V"], self.params.kernel_prior["var_V"]), warning=False)
-        return GPyRegression(parameter_names=self.model.parameter_names,
+                GPy.priors.Gamma.from_EV(self.params.kernel_prior["var_E"], self.params.kernel_prior["var_V"]), warning=False)
+            noise_prior = GPy.priors.Gamma.from_EV(self.params.kernel_prior["noise_E"], self.params.kernel_prior["noise_V"])
+        gp = GPyRegression(parameter_names=self.model.parameter_names,
                         bounds=self.params.bounds,
                         optimizer=self.params.gp_params_optimizer,
                         max_opt_iters=self.params.gp_params_max_opt_iters,
                         kernel=kernel,
-                        noise_var=self.params.noise_var)
+                        noise_var=self.params.noise_var,
+                        noise_prior=noise_prior)
+        return gp
 
     def _acquisition(self, gp):
         if self.params.sampling_type == "uniform":
@@ -494,7 +498,7 @@ class BolfiInferenceTask():
                            ("Prior density", self.post.prior.pdf),
                            ("Unnormalized likelihood", self.post._unnormalized_likelihood),
                            ("Unnormalized posterior", self.post.pdf)]:
-            n_tics = 150
+            n_tics = 50
             logger.debug("Plotting {}".format(fname))
             multiplot(plot_1d2d, loc, title=fname, pdf=pdf, figsize=figsize, fun=fun, bounds=bounds, n_tics=n_tics)
 

@@ -30,8 +30,8 @@ def inference_experiment(inference_factory,
             SamplingPhase(),
             PosteriorAnalysisPhase(types=types),
             PointEstimateSimulationPhase(replicates=replicates, region_size=region_size),
-            LikelihoodSamplesSimulationPhase(replicates=replicates),
-            PosteriorSamplesSimulationPhase(replicates=replicates),
+            #LikelihoodSamplesSimulationPhase(replicates=replicates),
+            #PosteriorSamplesSimulationPhase(replicates=replicates),
             PlottingPhase(pdf=pdf, figsize=figsize, obs_data=obs_data, test_data=test_data, plot_data=plot_data),
             GroundTruthErrorPhase(ground_truth=ground_truth),
             PredictionErrorPhase(test_data=test_data),
@@ -81,6 +81,7 @@ class SamplingPhase(InferencePhase):
         ret["n_samples"] = len(inference_task.samples)
         if hasattr(inference_task, "kernel_params"):
             ret["kernel_params"] = inference_task.kernel_params
+            logger.info("Kernel: {}".format(ret["kernel_params"]))
         return ret
 
 
@@ -107,6 +108,7 @@ class PosteriorAnalysisPhase(InferencePhase):
                     ret["lik_samples"] = inference_task.lik_samples
                     ret["lik_acc_prop"] = inference_task.lik_acc_prop
                     ret["LM"] = inference_task.LM
+                    logger.info("LM at {}".format(ret["LM"]))
                     lik_s_end = time.time()
                     ret["lik_sampling_duration"] = lik_s_end - lik_s_start
                 except Exception as e:
@@ -119,24 +121,28 @@ class PosteriorAnalysisPhase(InferencePhase):
                     ret["post_samples"] = inference_task.post_samples
                     ret["post_acc_prop"] = inference_task.post_acc_prop
                     ret["PM"] = inference_task.PM
+                    logger.info("PM at {}".format(ret["PM"]))
                     post_s_end = time.time()
                     ret["post_sampling_duration"] = post_s_end - post_s_start
                 except Exception as e:
                     tb = traceback.format_exc()
                     logger.critical(tb)
-            #ret["post"] = inference_task.post.to_dict()  # TODO
         if "MD" in self.types:
             ret["MD"] = inference_task.MD
             ret["MD_val"] = float(inference_task.MD_val)
+            logger.info("MD at {} (val {})".format(ret["MD"], ret["MD_val"]))
         if "MED" in self.types:
             ret["MED"] = inference_task.MED
             ret["MED_val"] = float(inference_task.MED_val)
+            logger.info("MED at {} (val {})".format(ret["MED"], ret["MED_val"]))
         if "ML" in self.types:
             ret["ML"] = inference_task.ML
             ret["ML_val"] = float(inference_task.ML_val)
+            logger.info("ML at {} (val {})".format(ret["ML"], ret["ML_val"]))
         if "MAP" in self.types:
             ret["MAP"] = inference_task.MAP
             ret["MAP_val"] = float(inference_task.MAP_val)
+            logger.info("MAP at {} (val {})".format(ret["MAP"], ret["MAP_val"]))
         return ret
 
 
@@ -336,27 +342,35 @@ class PredictionErrorPhase(InferencePhase):
             if "MD_sim" in ret.keys():
                 logger.info("Estimating MD prediction error")
                 ret["MD_errs"] = self._compute_errors(inference_task, ret["MD_sim"])
+                logger.info("Average MD error: {}".format(np.mean(ret["MD_errs"])))
             if "MED_sim" in ret.keys():
                 logger.info("Estimating MED prediction error")
                 ret["MED_errs"] = self._compute_errors(inference_task, ret["MED_sim"])
+                logger.info("Average MED error: {}".format(np.mean(ret["MED_errs"])))
             if "ML_sim" in ret.keys():
                 logger.info("Estimating ML prediction error")
                 ret["ML_errs"] = self._compute_errors(inference_task, ret["ML_sim"])
+                logger.info("Average ML error: {}".format(np.mean(ret["ML_errs"])))
             if "MAP_sim" in ret.keys():
                 logger.info("Estimating MAP prediction error")
                 ret["MAP_errs"] = self._compute_errors(inference_task, ret["MAP_sim"])
+                logger.info("Average MAP error: {}".format(np.mean(ret["MAP_errs"])))
             if "LM_sim" in ret.keys():
                 logger.info("Estimating LM prediction error")
                 ret["LM_errs"] = self._compute_errors(inference_task, ret["LM_sim"])
+                logger.info("Average LM error: {}".format(np.mean(ret["LM_errs"])))
             if "lik_sim" in ret.keys():
                 logger.info("Estimating Likelihood samples prediction error")
                 ret["lik_errs"] = self._compute_errors(inference_task, ret["lik_sim"])
+                logger.info("Average LIK error: {}".format(np.mean(ret["lik_errs"])))
             if "PM_sim" in ret.keys():
                 logger.info("Estimating PM prediction error")
                 ret["PM_errs"] = self._compute_errors(inference_task, ret["PM_sim"])
+                logger.info("Average PM error: {}".format(np.mean(ret["PM_errs"])))
             if "post_sim" in ret.keys():
                 logger.info("Estimating Posterior samples prediction error")
                 ret["post_errs"] = self._compute_errors(inference_task, ret["post_sim"])
+                logger.info("Average POST error: {}".format(np.mean(ret["post_errs"])))
         else:
             logger.info("Pass, no test data.")
         return ret
@@ -365,35 +379,6 @@ class PredictionErrorPhase(InferencePhase):
 def get_sample_pool(filename):
     data = read_json_file(filename)
     return SerializableOutputPool.from_dict(data["sample_pool"])
-
-
-def print_graph(data, name):
-    grid = 20
-    logger.info(name)
-    lmax = max(errors)
-    lmin = min(errors)
-    delta = (lmax - lmin) / float(grid)
-    for n in reversed(range(grid+2)):
-        lim = lmin + (n-1)*delta
-        st = ["{: >+7.3f}".format(lim)]
-        for e in errors:
-            if e >= lim:
-                st.append("*")
-            else:
-                st.append(" ")
-        logger.info("".join(st))
-
-
-def plot_graph(data, name, pdf, figsize):
-    fig = pl.figure(figsize=figsize)
-    t = range(len(errors))
-    pl.plot(t, errors)
-    pl.xlabel("Samples")
-    pl.ylabel(name)
-    pl.ylim(min(errors)-0.1, max(errors)+0.1)
-    pl.title("{} over time".format(name))
-    pdf.savefig()
-    pl.close()
 
 
 def rmse(a, b):
